@@ -1,4 +1,121 @@
-// Intentionally empty by default.
-// Add Drizzle tables here when the site actually needs a database.
-// See examples/d1/db/schema.ts for an opt-in example.
-export {};
+import {
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+export const families = pgTable("families", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const familyMembers = pgTable(
+  "family_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    authUserId: text("auth_user_id"),
+    invitedEmail: text("invited_email").notNull(),
+    displayName: text("display_name").notNull(),
+    role: text("role", { enum: ["owner", "adult", "child"] })
+      .default("adult")
+      .notNull(),
+    isActive: integer("is_active").default(1).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("family_members_auth_user_id_unique").on(table.authUserId),
+    uniqueIndex("family_members_invited_email_unique").on(table.invitedEmail),
+    index("family_members_family_id_idx").on(table.familyId),
+  ],
+);
+export const trips = pgTable(
+  "trips",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("trips_family_slug_unique").on(table.familyId, table.slug),
+    index("trips_family_sort_idx").on(table.familyId, table.sortOrder),
+  ],
+);
+
+export const tripStamps = pgTable(
+  "trip_stamps",
+  {
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => familyMembers.id, { onDelete: "cascade" }),
+    tripId: uuid("trip_id")
+      .notNull()
+      .references(() => trips.id, { onDelete: "cascade" }),
+    attempts: integer("attempts").default(0).notNull(),
+    lastAnswer: integer("last_answer"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.memberId, table.tripId] })],
+);
+
+export const tripVotes = pgTable(
+  "trip_votes",
+  {
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => familyMembers.id, { onDelete: "cascade" }),
+    roundSlug: text("round_slug").default("next-adventure").notNull(),
+    optionSlug: text("option_slug").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.memberId, table.roundSlug] })],
+);
+
+export const memories = pgTable(
+  "memories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => families.id, { onDelete: "cascade" }),
+    tripId: uuid("trip_id").references(() => trips.id, { onDelete: "set null" }),
+    uploadedByMemberId: uuid("uploaded_by_member_id").references(
+      () => familyMembers.id,
+      { onDelete: "set null" },
+    ),
+    kind: text("kind", { enum: ["image", "video"] }).notNull(),
+    source: text("source", { enum: ["device", "google_photos", "demo"] })
+      .default("device")
+      .notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    storageKey: text("storage_key"),
+    caption: text("caption"),
+    status: text("status", { enum: ["selected", "uploading", "ready", "failed"] })
+      .default("selected")
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("memories_family_created_idx").on(table.familyId, table.createdAt),
+    index("memories_trip_id_idx").on(table.tripId),
+  ],
+);

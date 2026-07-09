@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Providers } from "./providers";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -16,7 +17,13 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       "A playful family scrapbook for the trips, tiny moments, videos, quotes, and stories we never want to forget.",
     applicationName: "Family Adventure Book",
+    icons: { icon: "/favicon.svg" },
     keywords: ["family", "travel", "memories", "photos", "adventure book"],
+    robots: {
+      index: false,
+      follow: false,
+      googleBot: { index: false, follow: false },
+    },
     metadataBase: new URL(origin),
     openGraph: {
       title: "Our Great Big Family Adventure Book",
@@ -47,8 +54,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body><Providers>{children}</Providers></body>
     </html>
   );
 }

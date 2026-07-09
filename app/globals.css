@@ -1,5 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Nunito+Sans:opsz,wght@6..12,500;6..12,600;6..12,700;6..12,800;6..12,900&display=swap");
 @import "tailwindcss";
+@import "@neondatabase/auth/ui/tailwind";
 
 :root {
   --paper: #fff7e8;
@@ -183,6 +184,68 @@ video {
 .add-memory-button:hover {
   background: #27486e;
   transform: translateY(-2px);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+}
+
+.sync-status {
+  max-width: 170px;
+  overflow: hidden;
+  color: #31715a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 43px;
+  padding: 5px 11px 5px 6px;
+  color: var(--ink);
+  background: rgba(255, 253, 248, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.account-pill > span {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  color: #fff;
+  background: var(--coral);
+  border-radius: 50%;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 14px;
+}
+
+.account-pill b {
+  display: flex;
+  max-width: 95px;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-pill small {
+  margin-top: 3px;
+  color: var(--muted-ink);
+  font-size: 7px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .hero {
@@ -1227,6 +1290,16 @@ video {
   font-weight: 700;
 }
 
+.database-note {
+  display: block;
+  max-width: 280px;
+  margin-top: 6px;
+  color: #31715a;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
 .earned-stamp {
   position: absolute;
   right: 25px;
@@ -1423,6 +1496,12 @@ video {
 .vote-options button:hover {
   background: #fffdf8;
   transform: translateX(5px);
+}
+
+.vote-options button.selected {
+  background: #fffdf8;
+  border-color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--coral);
 }
 
 .vote-options button > span {
@@ -1810,6 +1889,248 @@ video {
 .google-setup li b { font-size: 12px; }
 .google-setup li small { margin-top: 2px; color: var(--muted-ink); font-size: 10px; }
 
+.auth-shell,
+.access-shell,
+.account-shell {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 96px 24px 48px;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 209, 102, 0.36), transparent 22rem),
+    radial-gradient(circle at 84% 78%, rgba(58, 134, 255, 0.14), transparent 28rem),
+    var(--paper);
+}
+
+.auth-shell::after,
+.access-shell::after {
+  position: fixed;
+  right: 6vw;
+  bottom: 4vh;
+  color: rgba(24, 49, 83, 0.08);
+  content: "✦";
+  font-size: clamp(150px, 24vw, 360px);
+  line-height: 1;
+  transform: rotate(12deg);
+}
+
+.auth-brand,
+.account-back {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  z-index: 1;
+  color: var(--ink);
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-brand span {
+  display: inline-grid;
+  width: 31px;
+  height: 31px;
+  margin-right: 8px;
+  place-items: center;
+  color: var(--paper);
+  background: var(--coral);
+  border-radius: 50%;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(320px, 1fr);
+  gap: 56px;
+  width: min(100%, 900px);
+  padding: 50px;
+  background: rgba(255, 253, 248, 0.92);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 14px 16px 0 rgba(24, 49, 83, 0.1);
+}
+
+.auth-intro {
+  align-self: center;
+}
+
+.auth-intro > span,
+.access-kicker {
+  color: var(--coral);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.auth-intro h1,
+.access-card h1 {
+  margin: 18px 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(39px, 5vw, 61px);
+  line-height: 0.98;
+}
+
+.auth-intro p,
+.access-card > p:not(.access-kicker) {
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.auth-view-wrap {
+  min-width: 0;
+}
+
+.auth-card form button[type="submit"] {
+  color: #fff;
+}
+
+.verification-link {
+  margin: 18px 0 0;
+  color: var(--muted-ink);
+  font-size: 11px;
+  text-align: center;
+}
+
+.verification-link a {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.verify-card {
+  grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1fr);
+}
+
+.verification-form {
+  display: grid;
+  align-content: center;
+  gap: 16px;
+}
+
+.verification-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.verification-form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid rgba(24, 49, 83, 0.3);
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.verification-form label:nth-child(2) input {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 22px;
+  letter-spacing: 0.32em;
+}
+
+.verification-submit {
+  min-height: 47px;
+  margin-top: 4px;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.verification-resend {
+  width: fit-content;
+  margin: 0 auto;
+  padding: 5px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.verification-form button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.verification-message {
+  min-height: 34px;
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.account-shell {
+  align-content: start;
+  justify-items: center;
+  padding-top: 110px;
+}
+
+.account-shell > :not(.account-back) {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 760px);
+}
+
+.account-back {
+  font-family: "Nunito Sans", sans-serif;
+  font-size: 12px;
+}
+
+.access-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 680px);
+  padding: 62px;
+  background: rgba(255, 253, 248, 0.94);
+  border: 2px solid var(--ink);
+  box-shadow: 14px 16px 0 rgba(24, 49, 83, 0.1);
+}
+
+.access-card form button {
+  min-height: 46px;
+  margin-top: 18px;
+  padding: 0 20px;
+  color: #fff;
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.access-stamp {
+  position: absolute;
+  top: -36px;
+  right: 40px;
+  display: grid;
+  width: 102px;
+  height: 102px;
+  place-items: center;
+  color: var(--coral);
+  border: 4px double var(--coral);
+  border-radius: 50%;
+  transform: rotate(11deg);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -1823,6 +2144,8 @@ video {
 }
 
 @media (max-width: 1120px) {
+  .sync-status { display: none; }
+
   .hero {
     grid-template-columns: 0.9fr 1.1fr;
     min-height: 760px;
@@ -1889,7 +2212,10 @@ video {
   .topbar { height: 82px; }
   .brand { font-size: 16px; }
   .brand-mark { width: 27px; height: 27px; }
-  .add-memory-button { min-height: 40px; padding: 0 13px; font-size: 10px; }
+  .account-pill { min-height: 40px; padding: 4px; }
+  .account-pill b { display: none; }
+  .add-memory-button { width: 40px; min-height: 40px; padding: 0; font-size: 0; }
+  .add-memory-button span { font-size: 17px; }
 
   .hero { padding: 124px 20px 45px; }
   .hero h1 { font-size: clamp(49px, 15vw, 66px); }
@@ -1961,6 +2287,17 @@ video {
   .import-options > button { min-height: 195px; }
   .import-grid { grid-template-columns: repeat(2, 1fr); }
   .lightbox { padding: 8px 8px 52px; }
+
+  .auth-shell,
+  .access-shell,
+  .account-shell { padding: 92px 16px 30px; }
+  .auth-brand,
+  .account-back { top: 25px; left: 20px; }
+  .auth-card,
+  .verify-card { grid-template-columns: 1fr; gap: 28px; padding: 28px 20px; }
+  .auth-intro h1 { font-size: 42px; }
+  .access-card { padding: 54px 25px 32px; }
+  .access-stamp { right: 18px; width: 86px; height: 86px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,47 +1,154 @@
 # Family Adventure Book
 
-A playful, responsive family travel scrapbook built with vinext and React. The
-first version includes an opening suitcase, interactive trip map, photo stacks,
-video postcards, locally saved memory-game stamps, explorer badges, a trip vote,
-and an “Add memories” flow.
+A private, interactive family scrapbook for remembering trips together. The
+current experience includes an opening suitcase, a trip map, photo stacks,
+video postcards, memory-game passport stamps, explorer badges, a family vote,
+and an add-memories flow.
 
-## Run it
+## Architecture
 
-Requires Node.js `>=22.13.0`.
+- **App and hosting:** Next.js App Router, React, and TypeScript on Vercel.
+- **Authentication:** Neon Auth, exposed through the Next.js handlers under
+  `/api/auth/*` and the UI under `/auth/*`.
+- **Authorization:** signing in is not enough to open the scrapbook. The server
+  also checks the signed-in email against the active invite allowlist in
+  `family_members`, then binds that record to the Neon Auth user ID.
+- **Data:** Neon Postgres through the Neon serverless driver and Drizzle ORM.
+  Families, members, trips, passport stamps, votes, and memory metadata are
+  stored in Postgres.
+- **Media:** selected filenames and MIME types can be recorded in Neon, but the
+  image and video bytes are not uploaded yet. Browser previews last only for the
+  current tab session. Add private object storage before treating this as a
+  durable photo archive.
+
+The interactive client is in `app/adventure-book.tsx`. The server page in
+`app/page.tsx` loads the signed-in family member's state, while mutations in
+`app/actions.ts` repeat the family authorization check before writing.
+
+## Local development
+
+Requirements:
+
+- Node.js 22.x
+- A Vercel project connected to a Neon integration
+- Neon Auth enabled for that Neon project
+
+Install and pull the development environment:
 
 ```bash
-npm install
+npm ci
+npx vercel@latest link
+npx vercel@latest env pull .env.local --yes
+npm run db:migrate
+npm run db:seed
 npm run dev
-npm run build
-node --test tests/rendered-html.test.mjs
 ```
 
-## Customize the memories
+Before running the idempotent seed, set `FAMILY_OWNER_EMAIL` in `.env.local` to
+the email that should own the book. `FAMILY_OWNER_NAME` is optional. The seed
+creates the family, owner invitation, and the four reference trip slugs used by
+the memory game. Create the Neon Auth account with that same email. After email
+verification, the first authorized request attaches its Auth user ID to the
+invited member record. Any other Auth account is denied family access.
 
-Trip content lives in the `trips` array near the top of `app/page.tsx`. Replace
-the sample titles, stories, quotes, statistics, image URLs, video URLs, and quiz
-answers there. The explorer cards and future-trip vote are further down in the
-same file. The visual system is in `app/globals.css`.
+## Environment variables
 
-The sample travel imagery and videos are placeholders. Do not publish private
-family media at public URLs. Use private object storage and an access policy
-before turning this into a shared family archive.
+The application reads these variables:
 
-## Photo connections
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Pooled Neon Postgres connection used by the app and Drizzle migrations. |
+| `NEON_AUTH_BASE_URL` | Neon Auth endpoint for the database branch. |
+| `NEON_AUTH_COOKIE_SECRET` | Secret used to protect Auth session cookies; use at least 32 random characters. |
+| `FAMILY_OWNER_EMAIL` | Email allowlisted as the initial family owner by `npm run db:seed`. |
+| `FAMILY_OWNER_NAME` | Optional display name for the seeded owner. |
 
-- **Apple Photos / device:** the working file chooser uses the operating
-  system’s protected picker on iPhone, iPad, Mac, Android, and desktop browsers.
-  Selected media is previewed for the current browser session only.
-- **Google Photos:** the interface explains the intended Google Photos Picker
-  API flow. A production connection still needs a Google Cloud OAuth client,
-  the Picker API enabled, a server-side token exchange, and private storage for
-  imported files.
-- **Automatic iCloud Photos sync:** this is not available to a normal website.
-  Broad library access would require a native iOS/macOS companion using
-  PhotoKit and explicit user permission.
+The Vercel/Neon integration may also provide `DATABASE_URL_UNPOOLED`, `PG*`,
+`POSTGRES*`, `NEON_PROJECT_ID`, and other managed aliases. They are useful for
+tooling but are not read directly by the running application. The owner values
+are seed inputs, not runtime authorization shortcuts.
 
-## Storage and privacy
+Never commit `.env.local` or copy production secrets into client-side
+`NEXT_PUBLIC_*` variables.
 
-`.openai/hosting.json` currently leaves D1 and R2 disabled because this version
-does not upload or persist private media. Enable private storage only when the
-family access model and deletion controls are defined.
+## Auth release checklist
+
+The project requires email verification before an invited email can claim a
+family profile. Verification uses Neon Auth's numeric OTP flow, which works with
+Neon's shared development email provider. Before inviting the wider family:
+
+1. Add the exact production Vercel/custom origin under Neon **Auth →
+   Configuration → Domains**.
+2. Replace the shared development mailer with a custom SMTP provider for
+   reliable verification and password-reset delivery.
+3. Disable **Allow Localhost** on the production branch when local testing no
+   longer uses that branch.
+4. Keep OAuth, passkeys, Organizations, and MCP auth plugins disabled until
+   their production configuration has been reviewed and tested.
+
+## Database changes
+
+Edit `db/schema.ts`, then generate and apply a checked-in migration:
+
+```bash
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+
+Run migrations against the intended Neon branch before deploying code that
+depends on them, then run the idempotent seed on a new or restored database. The
+current migration is in `drizzle/0000_wooden_gamora.sql`.
+
+## Validation and deployment
+
+```bash
+npm run lint
+npm test
+npx vercel@latest --prod
+```
+
+`npm test` performs a production Next.js build and then runs lightweight source
+contracts covering the native Next.js runtime, Neon Auth routing, family-level
+authorization, and the PostgreSQL schema. Configure the three required runtime
+variables for Development, Preview, and Production in Vercel.
+
+## Apple Photos and Google Photos
+
+### Available now
+
+The Add Memories button uses the browser's protected file chooser. On iPhone,
+iPad, Mac, Android, and desktop browsers, the operating system can offer the
+user's photo library as a source. The user explicitly chooses each photo or
+video; the website never receives broad or background access to the library.
+
+### Google Photos
+
+The Google Photos connection shown in the interface is not wired to Google's
+API yet. A production integration should use the
+[Google Photos Picker API](https://developers.google.com/photos/picker/guides/get-started-picker):
+obtain OAuth consent, create a picker session, send the user to its picker URL,
+poll for completion, retrieve only the selected items, and delete the session.
+The picker URL cannot be embedded in an iframe. Selected-media base URLs are
+temporary, so copy approved media into family-private object storage instead of
+storing Google URLs in Neon.
+
+### Apple Photos and iCloud Photos
+
+Apple's broad library API is
+[PhotoKit](https://developer.apple.com/documentation/photokit), which is for
+native Apple-platform apps rather than a normal website. This web app can use
+the system file picker for explicit selections, but it cannot continuously sync
+an iCloud Photos library. Album-level or background sync would require a native
+iOS/macOS companion app, explicit Photo Library permission, and a secure upload
+flow to private storage.
+
+## Privacy notes
+
+- Keep the Vercel deployment and all media storage private to invited family
+  members.
+- Authorize every read and write with the server-derived family/member ID; do
+  not accept a family ID supplied by the browser.
+- Store media bytes in private object storage, not Postgres and not public URLs.
+- Add deletion, export, retention, and invite-management controls before loading
+  irreplaceable family media.
