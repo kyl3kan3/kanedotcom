@@ -157,3 +157,74 @@ test("Google Photos imports become permanent private family memories", () => {
   assert.match(delivery, /eq\(memories\.familyId, member\.familyId\)/);
   assert.match(delivery, /getPrivateMemoryUrl/);
 });
+
+test("Google Photos connection is configuration-aware and browser-safe", () => {
+  const configuration = read("lib", "google-photos.ts");
+  const statusRoute = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "status",
+    "route.ts",
+  );
+  const sessionRoute = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "session",
+    "route.ts",
+  );
+  const importer = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "sessions",
+    "[sessionId]",
+    "route.ts",
+  );
+  const callback = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "callback",
+    "route.ts",
+  );
+  const client = read("app", "adventure-book.tsx");
+  const proxy = read("proxy.ts");
+  const envExample = read(".env.example");
+  const readme = read("README.md");
+
+  for (const variable of [
+    "GOOGLE_PHOTOS_CLIENT_ID",
+    "GOOGLE_PHOTOS_CLIENT_SECRET",
+    "GOOGLE_PHOTOS_REDIRECT_URI",
+  ]) {
+    assert.match(configuration, new RegExp(variable));
+    assert.match(envExample, new RegExp(`^${variable}=`, "m"));
+  }
+
+  assert.match(statusRoute, /getGooglePhotosConfigStatus/);
+  assert.match(configuration, /BLOB_READ_WRITE_TOKEN/);
+  assert.match(configuration, /https:\/\/kanedotcom\.com/);
+  assert.match(sessionRoute, /configured:\s*false/);
+  assert.match(sessionRoute, /timeoutAfterMs/);
+  assert.match(importer, /pollingConfig\?\.timeoutIn/);
+  assert.match(importer, /Choose 50 or fewer Google Photos/);
+  assert.match(client, /googlePollExpiryTimerRef/);
+  assert.match(client, /window\.open\(\s*["']about:blank["']/);
+  assert.match(client, /Open picker manually/);
+  assert.match(callback, /try\s*{[\s\S]*oauth2\.googleapis\.com\/token/);
+  assert.match(proxy, /VERCEL_ENV\s*===\s*["']production["']/);
+  assert.match(proxy, /kanedotcom\.com/);
+
+  const popupIndex = client.indexOf('window.open(\n      "about:blank"');
+  const sessionFetchIndex = client.indexOf(
+    'fetch("/api/photos/google/session"',
+  );
+  assert.ok(popupIndex >= 0 && popupIndex < sessionFetchIndex);
+  assert.doesNotMatch(readme, /connection shown in the interface is not wired/i);
+});

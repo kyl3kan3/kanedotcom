@@ -1,7 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getAuth } from "@/lib/auth/server";
 
+const productionHost = "kanedotcom.com";
+
 export async function proxy(request: NextRequest) {
+  if (
+    process.env.VERCEL_ENV === "production" &&
+    request.nextUrl.hostname !== productionHost
+  ) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = productionHost;
+    canonicalUrl.port = "";
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
   if (
     [
       "/auth/verify-email",

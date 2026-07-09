@@ -4,10 +4,13 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { memories } from "@/db/schema";
 import {
+  GooglePhotosApiError,
   type GooglePhotosSession,
   type GooglePickedMediaItem,
+  clearGoogleAccessToken,
   fetchGooglePhotos,
   getGoogleAccessToken,
+  googleDurationToMilliseconds,
   googlePhotosError,
   requireGooglePhotosAdmin,
 } from "@/lib/google-photos";
@@ -43,9 +46,12 @@ type ImportedMemory = {
 };
 
 function pollAfterMs(session: GooglePhotosSession) {
-  const interval = session.pollingConfig?.pollInterval;
-  const seconds = interval?.endsWith("s") ? Number(interval.slice(0, -1)) : NaN;
-  return Number.isFinite(seconds) ? Math.max(1000, seconds * 1000) : 3000;
+  return googleDurationToMilliseconds(
+    session.pollingConfig?.pollInterval,
+    3000,
+    1000,
+    30_000,
+  );
 }
 
 async function listPickedItems(sessionId: string, accessToken: string) {
@@ -67,7 +73,10 @@ async function listPickedItems(sessionId: string, accessToken: string) {
     pageToken = page.nextPageToken;
   } while (pageToken && items.length < 50);
 
-  return items.slice(0, 50);
+  return {
+    items: items.slice(0, 50),
+    hasMore: Boolean(pageToken) || items.length > 50,
+  };
 }
 
 async function deleteSession(sessionId: string, accessToken: string) {
@@ -209,7 +218,16 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
-  const member = await requireGooglePhotosAdmin();
+  let member: Awaited<ReturnType<typeof requireGooglePhotosAdmin>>;
+  try {
+    member = await requireGooglePhotosAdmin();
+  } catch {
+    return googlePhotosError(
+      "Only the family admin can import from Google Photos.",
+      403,
+    );
+  }
+
   const accessToken = await getGoogleAccessToken();
   if (!accessToken) {
     return NextResponse.json(
@@ -230,10 +248,26 @@ export async function GET(
       return NextResponse.json({
         ready: false,
         pollAfterMs: pollAfterMs(session),
+        timeoutAfterMs: googleDurationToMilliseconds(
+          session.pollingConfig?.timeoutIn,
+          10 * 60 * 1000,
+          60_000,
+          30 * 60 * 1000,
+        ),
       });
     }
 
-    const pickedItems = await listPickedItems(sessionId, accessToken);
+    const { items: pickedItems, hasMore } = await listPickedItems(
+      sessionId,
+      accessToken,
+    );
+    if (hasMore) {
+      await deleteSession(sessionId, accessToken).catch(() => undefined);
+      throw new Error(
+        "Choose 50 or fewer Google Photos at a time so every memory can be copied safely.",
+      );
+    }
+
     const candidates = pickedItems.flatMap((item) => {
       const file = item.mediaFile;
       if (!file?.baseUrl || !file.mimeType) return [];
@@ -263,12 +297,10 @@ export async function GET(
       member,
     );
 
+    await deleteSession(sessionId, accessToken).catch(() => undefined);
+
     if (successes.length === 0 && failures.length > 0) {
       throw new Error(`No memories were saved. ${failures[0]}`);
-    }
-
-    if (failures.length === 0) {
-      await deleteSession(sessionId, accessToken);
     }
 
     const saved = successes.filter((result) => result.saved).length;
@@ -281,11 +313,19 @@ export async function GET(
       failed: failures.length,
     });
   } catch (error) {
+    if (error instanceof GooglePhotosApiError && error.status === 401) {
+      await clearGoogleAccessToken();
+      return NextResponse.json(
+        { needsAuth: true, authUrl: "/api/photos/google/start" },
+        { status: 401 },
+      );
+    }
+
     return googlePhotosError(
       error instanceof Error
         ? error.message
         : "Could not permanently import Google Photos.",
-      502,
+      error instanceof GooglePhotosApiError && error.status === 403 ? 403 : 502,
     );
   }
 }

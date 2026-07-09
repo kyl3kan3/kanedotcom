@@ -1901,6 +1901,23 @@ video {
 .google-setup li b { font-size: 12px; }
 .google-setup li small { margin-top: 2px; color: var(--muted-ink); font-size: 10px; }
 
+.google-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.google-picker-fallback {
+  background: var(--teal);
+  box-shadow: 0 9px 0 #28766e, 0 16px 28px rgba(43, 125, 116, 0.2);
+  text-decoration: none;
+}
+
+.google-picker-fallback:hover {
+  box-shadow: 0 12px 0 #28766e, 0 20px 32px rgba(43, 125, 116, 0.24);
+}
+
 .auth-shell,
 .access-shell,
 .account-shell {

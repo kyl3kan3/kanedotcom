@@ -16,10 +16,9 @@ and an add-memories flow.
 - **Data:** Neon Postgres through the Neon serverless driver and Drizzle ORM.
   Families, members, trips, passport stamps, votes, and memory metadata are
   stored in Postgres.
-- **Media:** selected filenames and MIME types can be recorded in Neon, but the
-  image and video bytes are not uploaded yet. Browser previews last only for the
-  current tab session. Add private object storage before treating this as a
-  durable photo archive.
+- **Media:** device selections are previewed in the browser and recorded as
+  metadata. Admin-selected Google Photos are copied into private Vercel Blob
+  storage, while Neon stores their family-scoped records and access checks.
 
 The interactive client is in `app/adventure-book.tsx`. The server page in
 `app/page.tsx` loads the signed-in family member's state, while mutations in
@@ -62,6 +61,10 @@ The application reads these variables:
 | `NEON_AUTH_COOKIE_SECRET` | Secret used to protect Auth session cookies; use at least 32 random characters. |
 | `FAMILY_OWNER_EMAIL` | Email allowlisted as the initial family owner by `npm run db:seed`. |
 | `FAMILY_OWNER_NAME` | Optional display name for the seeded owner. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob credential used to store private permanent copies of selected Google Photos. |
+| `GOOGLE_PHOTOS_CLIENT_ID` | Google OAuth 2.0 Web application client ID. |
+| `GOOGLE_PHOTOS_CLIENT_SECRET` | Server-only secret for that Google OAuth client. |
+| `GOOGLE_PHOTOS_REDIRECT_URI` | Exact OAuth callback URL. Production uses `https://kanedotcom.com/api/photos/google/callback`. |
 
 The Vercel/Neon integration may also provide `DATABASE_URL_UNPOOLED`, `PG*`,
 `POSTGRES*`, `NEON_PROJECT_ID`, and other managed aliases. They are useful for
@@ -110,8 +113,9 @@ npx vercel@latest --prod
 
 `npm test` performs a production Next.js build and then runs lightweight source
 contracts covering the native Next.js runtime, Neon Auth routing, family-level
-authorization, and the PostgreSQL schema. Configure the three required runtime
-variables for Development, Preview, and Production in Vercel.
+authorization, the PostgreSQL schema, and private Google Photos imports.
+Configure the database/Auth variables plus Blob and Google OAuth variables in
+Vercel before deploying the corresponding features.
 
 ## Apple Photos and Google Photos
 
@@ -124,14 +128,33 @@ video; the website never receives broad or background access to the library.
 
 ### Google Photos
 
-The Google Photos connection shown in the interface is not wired to Google's
-API yet. A production integration should use the
-[Google Photos Picker API](https://developers.google.com/photos/picker/guides/get-started-picker):
-obtain OAuth consent, create a picker session, send the user to its picker URL,
-poll for completion, retrieve only the selected items, and delete the session.
-The picker URL cannot be embedded in an iframe. Selected-media base URLs are
-temporary, so copy approved media into family-private object storage instead of
-storing Google URLs in Neon.
+The admin-only flow uses the
+[Google Photos Picker API](https://developers.google.com/photos/picker/guides/get-started-picker).
+It obtains OAuth consent, creates a picker session, opens Google's secure
+picker, polls using Google's recommended interval and timeout, copies up to 50
+selected items into private Vercel Blob storage, records them in Neon, and
+deletes the Picker session. It never requests broad background library access.
+
+Google Cloud and Vercel still need matching credentials before the button can
+connect:
+
+1. Create or select a Google Cloud project and enable **Google Photos Picker
+   API**.
+2. Configure the OAuth consent screen. While the app is in Testing, add the
+   family admin's Google account as a test user.
+3. Create an OAuth 2.0 client with application type **Web application**.
+4. Add `https://kanedotcom.com` as an authorized JavaScript origin and add
+   `https://kanedotcom.com/api/photos/google/callback` as an authorized redirect
+   URI. Google requires this redirect to match exactly.
+5. Store the client ID and secret in Vercel as `GOOGLE_PHOTOS_CLIENT_ID` and
+   `GOOGLE_PHOTOS_CLIENT_SECRET`. Set `GOOGLE_PHOTOS_REDIRECT_URI` to the exact
+   callback above. Apply them to Production, then redeploy.
+
+For local development, create a separate Web OAuth client using
+`http://localhost:3000/api/photos/google/callback` and place its values only in
+`.env.local`. Never commit the client secret. Preview deployments need a stable
+preview hostname and their own authorized redirect; do not use arbitrary Vercel
+preview URLs for this OAuth flow.
 
 ### Apple Photos and iCloud Photos
 

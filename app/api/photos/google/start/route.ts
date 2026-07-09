@@ -5,13 +5,30 @@ import {
   GOOGLE_PHOTOS_STATE_COOKIE,
   getCookieOptions,
   getGooglePhotosConfig,
+  googlePhotosError,
   requireGooglePhotosAdmin,
 } from "@/lib/google-photos";
 
 export async function GET(request: Request) {
-  await requireGooglePhotosAdmin();
+  try {
+    await requireGooglePhotosAdmin();
+  } catch {
+    return googlePhotosError(
+      "Only the family admin can connect Google Photos.",
+      403,
+    );
+  }
 
-  const { clientId, redirectUri } = getGooglePhotosConfig(request);
+  let configuration: ReturnType<typeof getGooglePhotosConfig>;
+  try {
+    configuration = getGooglePhotosConfig(request);
+  } catch {
+    const url = new URL("/", request.url);
+    url.searchParams.set("googlePhotos", "setup");
+    return NextResponse.redirect(url);
+  }
+
+  const { clientId, redirectUri } = configuration;
   const state = crypto.randomUUID();
   const cookieStore = await cookies();
   cookieStore.set(GOOGLE_PHOTOS_STATE_COOKIE, state, getCookieOptions(10 * 60));

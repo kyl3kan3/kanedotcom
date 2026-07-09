@@ -15,7 +15,7 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 
-function redirectHome(request: Request, status: "ready" | "error") {
+function redirectHome(request: Request, status: "ready" | "error" | "setup") {
   const url = new URL("/", request.url);
   url.searchParams.set("googlePhotos", status);
   url.hash = "top";
@@ -23,9 +23,17 @@ function redirectHome(request: Request, status: "ready" | "error") {
 }
 
 export async function GET(request: Request) {
-  await requireGooglePhotosAdmin();
+  try {
+    await requireGooglePhotosAdmin();
+  } catch {
+    return redirectHome(request, "error");
+  }
 
   const requestUrl = new URL(request.url);
+  if (requestUrl.searchParams.has("error")) {
+    return redirectHome(request, "error");
+  }
+
   const code = requestUrl.searchParams.get("code");
   const state = requestUrl.searchParams.get("state");
   const cookieStore = await cookies();
@@ -35,7 +43,14 @@ export async function GET(request: Request) {
     return redirectHome(request, "error");
   }
 
-  const { clientId, clientSecret, redirectUri } = getGooglePhotosConfig(request);
+  let configuration: ReturnType<typeof getGooglePhotosConfig>;
+  try {
+    configuration = getGooglePhotosConfig(request);
+  } catch {
+    return redirectHome(request, "setup");
+  }
+
+  const { clientId, clientSecret, redirectUri } = configuration;
   const body = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,
@@ -44,14 +59,20 @@ export async function GET(request: Request) {
     redirect_uri: redirectUri,
   });
 
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const token = (await tokenResponse.json()) as GoogleTokenResponse;
-
-  if (!tokenResponse.ok || !token.access_token) {
+  let token: GoogleTokenResponse;
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    token = (await tokenResponse.json()) as GoogleTokenResponse;
+    if (!tokenResponse.ok || !token.access_token) {
+      cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
+      return redirectHome(request, "error");
+    }
+  } catch {
+    cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
     return redirectHome(request, "error");
   }
 

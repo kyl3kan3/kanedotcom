@@ -250,14 +250,20 @@ type GoogleSessionResponse = {
   id?: string;
   pickerUri?: string;
   pollAfterMs?: number;
+  timeoutAfterMs?: number;
   needsAuth?: boolean;
   authUrl?: string;
+  configured?: boolean;
+  missing?: string[];
+  issues?: string[];
+  redirectUri?: string;
   error?: string;
 };
 
 type GoogleImportResponse = {
   ready?: boolean;
   pollAfterMs?: number;
+  timeoutAfterMs?: number;
   needsAuth?: boolean;
   authUrl?: string;
   imported?: ImportedMedia[];
@@ -308,11 +314,24 @@ export default function AdventureBook({
   const [importedMedia, setImportedMedia] =
     useState<ImportedMedia[]>(initialMemories);
   const [googleStatus, setGoogleStatus] = useState<
-    "idle" | "ready" | "starting" | "picking" | "polling" | "done" | "error"
+    | "idle"
+    | "ready"
+    | "unconfigured"
+    | "starting"
+    | "picking"
+    | "polling"
+    | "done"
+    | "error"
   >("idle");
   const [googleMessage, setGoogleMessage] = useState(
     "Connect your private Google Photos picker to choose memories.",
   );
+  const [googlePickerUrl, setGooglePickerUrl] = useState<string | null>(null);
+  const [pendingGoogleSession, setPendingGoogleSession] = useState<{
+    id: string;
+    pollAfterMs: number;
+    timeoutAfterMs: number;
+  } | null>(null);
   const [votes, setVotes] = useState(() =>
     baseVotes.map(
       (base, index) => base + (initialVoteCounts[voteOptions[index].slug] ?? 0),
@@ -324,14 +343,67 @@ export default function AdventureBook({
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
+  const googlePollTimerRef = useRef<number | null>(null);
+  const googlePollExpiryTimerRef = useRef<number | null>(null);
+  const googlePollActiveSessionRef = useRef<string | null>(null);
   const activeTrip = trips[activeTripIndex];
   const quizCorrect = quizAnswer === activeTrip.quiz.correct;
 
   useEffect(() => {
     return () => {
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      if (googlePollTimerRef.current !== null) {
+        window.clearTimeout(googlePollTimerRef.current);
+      }
+      if (googlePollExpiryTimerRef.current !== null) {
+        window.clearTimeout(googlePollExpiryTimerRef.current);
+      }
+      googlePollActiveSessionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !importOpen ||
+      importView !== "google" ||
+      !isAdmin ||
+      googleStatus !== "idle"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void fetch("/api/photos/google/status", { cache: "no-store" })
+      .then(async (response) => {
+        const result = (await response.json()) as GoogleSessionResponse;
+        if (cancelled) return;
+
+        if (response.ok && result.configured) {
+          setGoogleStatus("ready");
+          setGoogleMessage(
+            "Google Photos is configured. Connect the admin account and choose up to 50 memories.",
+          );
+          return;
+        }
+
+        const details = [...(result.missing ?? []), ...(result.issues ?? [])];
+        setGoogleStatus("unconfigured");
+        setGoogleMessage(
+          details.length > 0
+            ? `Setup needed in Vercel: ${details.join(", ")}`
+            : result.error ?? "Google Photos still needs its Google Cloud OAuth setup.",
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setGoogleStatus("error");
+        setGoogleMessage("Could not check the Google Photos connection.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleStatus, importOpen, importView, isAdmin]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -344,6 +416,11 @@ export default function AdventureBook({
       if (googlePhotos === "ready") {
         setGoogleStatus("ready");
         setGoogleMessage("Google Photos is connected. Start the picker to choose trip memories.");
+      } else if (googlePhotos === "setup") {
+        setGoogleStatus("unconfigured");
+        setGoogleMessage(
+          "Google Photos needs a Web OAuth client and callback URL configured in Vercel.",
+        );
       } else {
         setGoogleStatus("error");
         setGoogleMessage("Google Photos did not connect. Try again from the admin account.");
@@ -412,15 +489,61 @@ export default function AdventureBook({
 
   const chooseFiles = () => fileInputRef.current?.click();
 
-  const pollGooglePhotosSession = (sessionId: string, delayMs = 3000) => {
-    window.setTimeout(async () => {
+  const stopGooglePhotosPolling = () => {
+    if (googlePollTimerRef.current !== null) {
+      window.clearTimeout(googlePollTimerRef.current);
+    }
+    if (googlePollExpiryTimerRef.current !== null) {
+      window.clearTimeout(googlePollExpiryTimerRef.current);
+    }
+    googlePollTimerRef.current = null;
+    googlePollExpiryTimerRef.current = null;
+    googlePollActiveSessionRef.current = null;
+    setPendingGoogleSession(null);
+  };
+
+  const pollGooglePhotosSession = (
+    sessionId: string,
+    delayMs = 3000,
+    timeoutAfterMs?: number,
+  ) => {
+    const safeDelay = Math.min(30_000, Math.max(1000, delayMs));
+    googlePollActiveSessionRef.current = sessionId;
+
+    if (timeoutAfterMs && googlePollExpiryTimerRef.current === null) {
+      googlePollExpiryTimerRef.current = window.setTimeout(() => {
+        if (googlePollActiveSessionRef.current !== sessionId) return;
+        if (googlePollTimerRef.current !== null) {
+          window.clearTimeout(googlePollTimerRef.current);
+        }
+        googlePollTimerRef.current = null;
+        googlePollExpiryTimerRef.current = null;
+        googlePollActiveSessionRef.current = null;
+        setPendingGoogleSession(null);
+        setGooglePickerUrl(null);
+        setGoogleStatus("error");
+        setGoogleMessage(
+          "The Google Photos picker timed out. Start a new picker when you are ready.",
+        );
+      }, Math.max(1000, timeoutAfterMs));
+    }
+
+    if (googlePollTimerRef.current !== null) {
+      window.clearTimeout(googlePollTimerRef.current);
+    }
+
+    googlePollTimerRef.current = window.setTimeout(async () => {
+      googlePollTimerRef.current = null;
       try {
         const response = await fetch(
           `/api/photos/google/sessions/${encodeURIComponent(sessionId)}`,
         );
         const result = (await response.json()) as GoogleImportResponse;
+        if (googlePollActiveSessionRef.current !== sessionId) return;
 
         if (response.status === 401 && result.authUrl) {
+          stopGooglePhotosPolling();
+          setGooglePickerUrl(null);
           window.location.href = result.authUrl;
           return;
         }
@@ -432,7 +555,11 @@ export default function AdventureBook({
         if (!result.ready) {
           setGoogleStatus("polling");
           setGoogleMessage("Waiting for Google Photos and preparing permanent private copies...");
-          pollGooglePhotosSession(sessionId, result.pollAfterMs ?? 3000);
+          pollGooglePhotosSession(
+            sessionId,
+            result.pollAfterMs ?? 3000,
+            result.timeoutAfterMs,
+          );
           return;
         }
 
@@ -452,17 +579,30 @@ export default function AdventureBook({
         } else {
           setGoogleMessage("Google Photos finished, but no usable photos or videos were selected.");
         }
+        stopGooglePhotosPolling();
+        setGooglePickerUrl(null);
         setGoogleStatus("done");
       } catch (error) {
+        if (googlePollActiveSessionRef.current !== sessionId) return;
+        stopGooglePhotosPolling();
+        setGooglePickerUrl(null);
         setGoogleStatus("error");
         setGoogleMessage(error instanceof Error ? error.message : "Google Photos import failed.");
       }
-    }, delayMs);
+    }, safeDelay);
   };
 
   const startGooglePhotosImport = async () => {
     if (!isAdmin) return;
 
+    const pickerWindow = window.open(
+      "about:blank",
+      "family-google-photos",
+      "popup,width=980,height=760",
+    );
+
+    setGooglePickerUrl(null);
+    setPendingGoogleSession(null);
     setGoogleStatus("starting");
     setGoogleMessage("Starting a private Google Photos picker session...");
 
@@ -473,19 +613,42 @@ export default function AdventureBook({
       const result = (await response.json()) as GoogleSessionResponse;
 
       if (response.status === 401 && result.authUrl) {
+        pickerWindow?.close();
         window.location.href = result.authUrl;
         return;
       }
 
       if (!response.ok || !result.id || !result.pickerUri) {
+        pickerWindow?.close();
         throw new Error(result.error ?? "Could not start Google Photos.");
       }
 
       setGoogleStatus("picking");
       setGoogleMessage("Google Photos opened in a new tab. Pick the memories; the book will make private permanent copies.");
-      window.open(result.pickerUri, "family-google-photos", "popup,width=980,height=760");
-      pollGooglePhotosSession(result.id, result.pollAfterMs ?? 3000);
+      if (pickerWindow && !pickerWindow.closed) {
+        pickerWindow.location.href = result.pickerUri;
+        googlePollExpiryTimerRef.current = null;
+        googlePollActiveSessionRef.current = null;
+        pollGooglePhotosSession(
+          result.id,
+          result.pollAfterMs ?? 3000,
+          result.timeoutAfterMs ?? 10 * 60 * 1000,
+        );
+      } else {
+        setGooglePickerUrl(result.pickerUri);
+        setPendingGoogleSession({
+          id: result.id,
+          pollAfterMs: result.pollAfterMs ?? 3000,
+          timeoutAfterMs: result.timeoutAfterMs ?? 10 * 60 * 1000,
+        });
+        setGoogleMessage(
+          "Your browser blocked the popup. Use the manual button below, then finish choosing in Google Photos.",
+        );
+      }
     } catch (error) {
+      pickerWindow?.close();
+      stopGooglePhotosPolling();
+      setGooglePickerUrl(null);
       setGoogleStatus("error");
       setGoogleMessage(error instanceof Error ? error.message : "Could not start Google Photos.");
     }
@@ -949,22 +1112,58 @@ export default function AdventureBook({
                 <p>{googleMessage}</p>
                 <ol>
                   <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
-                  <li><span>2</span><div><b>Choose memories in Google Photos</b><small>The picker opens in a new tab and closes when selection is done.</small></div></li>
+                  <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 50 at a time. The secure picker closes when selection is done.</small></div></li>
                   <li><span>3</span><div><b>Selected items join the book</b><small>Private Vercel Blob copies hold the files; Neon keeps their family records.</small></div></li>
                 </ol>
                 {isAdmin ? (
-                  <button
-                    className="primary-button"
-                    onClick={startGooglePhotosImport}
-                    disabled={googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"}
-                  >
-                    {googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"
-                      ? "Waiting for Google Photos..."
-                      : googleStatus === "ready"
-                        ? "Open Google Photos picker"
-                        : "Connect and pick memories"}
-                    <span aria-hidden="true">→</span>
-                  </button>
+                  <div className="google-picker-actions">
+                    <button
+                      className="primary-button"
+                      onClick={startGooglePhotosImport}
+                      disabled={
+                        googleStatus === "idle" ||
+                        googleStatus === "unconfigured" ||
+                        googleStatus === "starting" ||
+                        googleStatus === "picking" ||
+                        googleStatus === "polling"
+                      }
+                    >
+                      {googleStatus === "idle"
+                        ? "Checking Google setup..."
+                        : googleStatus === "unconfigured"
+                          ? "Google setup needed"
+                          : googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"
+                            ? "Waiting for Google Photos..."
+                            : googleStatus === "ready"
+                              ? "Open Google Photos picker"
+                              : "Connect and pick memories"}
+                      <span aria-hidden="true">→</span>
+                    </button>
+                    {googlePickerUrl && (
+                      <a
+                        className="primary-button google-picker-fallback"
+                        href={googlePickerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => {
+                          if (!pendingGoogleSession) return;
+                          setGooglePickerUrl(null);
+                          setPendingGoogleSession(null);
+                          setGoogleStatus("polling");
+                          setGoogleMessage(
+                            "Waiting for your Google Photos selection and preparing private copies...",
+                          );
+                          pollGooglePhotosSession(
+                            pendingGoogleSession.id,
+                            pendingGoogleSession.pollAfterMs,
+                            pendingGoogleSession.timeoutAfterMs,
+                          );
+                        }}
+                      >
+                        Open picker manually <span aria-hidden="true">↗</span>
+                      </a>
+                    )}
+                  </div>
                 ) : (
                   <button className="primary-button" onClick={chooseFiles}>Use this device instead <span>→</span></button>
                 )}
