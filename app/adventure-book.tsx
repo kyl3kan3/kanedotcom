@@ -243,14 +243,37 @@ type ImportedMedia = {
   url: string;
   kind: "image" | "video";
   mimeType: string;
+  source?: "device" | "google_photos";
+};
+
+type GoogleSessionResponse = {
+  id?: string;
+  pickerUri?: string;
+  pollAfterMs?: number;
+  needsAuth?: boolean;
+  authUrl?: string;
+  error?: string;
+};
+
+type GoogleImportResponse = {
+  ready?: boolean;
+  pollAfterMs?: number;
+  needsAuth?: boolean;
+  authUrl?: string;
+  imported?: ImportedMedia[];
+  saved?: number;
+  failed?: number;
+  error?: string;
 };
 
 type AdventureBookProps = {
   memberName: string;
   memberRole: string;
+  isAdmin: boolean;
   initialStampedTrips: string[];
   initialVoteCounts: Record<string, number>;
   initialCurrentVote: string | null;
+  initialMemories: ImportedMedia[];
   savedMemoryCount: number;
 };
 
@@ -265,9 +288,11 @@ const baseVotes = [4, 7, 3];
 export default function AdventureBook({
   memberName,
   memberRole,
+  isAdmin,
   initialStampedTrips,
   initialVoteCounts,
   initialCurrentVote,
+  initialMemories,
   savedMemoryCount,
 }: AdventureBookProps) {
   const [activeTripIndex, setActiveTripIndex] = useState(0);
@@ -280,7 +305,14 @@ export default function AdventureBook({
   >();
   const [importOpen, setImportOpen] = useState(false);
   const [importView, setImportView] = useState<"choose" | "google">("choose");
-  const [importedMedia, setImportedMedia] = useState<ImportedMedia[]>([]);
+  const [importedMedia, setImportedMedia] =
+    useState<ImportedMedia[]>(initialMemories);
+  const [googleStatus, setGoogleStatus] = useState<
+    "idle" | "ready" | "starting" | "picking" | "polling" | "done" | "error"
+  >("idle");
+  const [googleMessage, setGoogleMessage] = useState(
+    "Connect your private Google Photos picker to choose memories.",
+  );
   const [votes, setVotes] = useState(() =>
     baseVotes.map(
       (base, index) => base + (initialVoteCounts[voteOptions[index].slug] ?? 0),
@@ -299,6 +331,30 @@ export default function AdventureBook({
     return () => {
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googlePhotos = params.get("googlePhotos");
+    if (!googlePhotos) return;
+
+    window.setTimeout(() => {
+      setImportOpen(true);
+      setImportView("google");
+      if (googlePhotos === "ready") {
+        setGoogleStatus("ready");
+        setGoogleMessage("Google Photos is connected. Start the picker to choose trip memories.");
+      } else {
+        setGoogleStatus("error");
+        setGoogleMessage("Google Photos did not connect. Try again from the admin account.");
+      }
+    }, 0);
+
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.hash}`,
+    );
   }, []);
 
   useEffect(() => {
@@ -356,6 +412,85 @@ export default function AdventureBook({
 
   const chooseFiles = () => fileInputRef.current?.click();
 
+  const pollGooglePhotosSession = (sessionId: string, delayMs = 3000) => {
+    window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/photos/google/sessions/${encodeURIComponent(sessionId)}`,
+        );
+        const result = (await response.json()) as GoogleImportResponse;
+
+        if (response.status === 401 && result.authUrl) {
+          window.location.href = result.authUrl;
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Google Photos import failed.");
+        }
+
+        if (!result.ready) {
+          setGoogleStatus("polling");
+          setGoogleMessage("Waiting for Google Photos and preparing permanent private copies...");
+          pollGooglePhotosSession(sessionId, result.pollAfterMs ?? 3000);
+          return;
+        }
+
+        const media = result.imported ?? [];
+        const newlySaved = result.saved ?? media.length;
+        const failed = result.failed ?? 0;
+        if (media.length > 0) {
+          setImportedMedia((current) => {
+            const incomingIds = new Set(media.map((item) => item.id));
+            return [...media, ...current.filter((item) => !incomingIds.has(item.id))];
+          });
+          setSavedMetadataCount((current) => current + newlySaved);
+          setSyncMessage(`${media.length} Google memor${media.length === 1 ? "y" : "ies"} stored privately`);
+          setGoogleMessage(
+            `${media.length} Google Photos memor${media.length === 1 ? "y is" : "ies are"} permanently in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}`,
+          );
+        } else {
+          setGoogleMessage("Google Photos finished, but no usable photos or videos were selected.");
+        }
+        setGoogleStatus("done");
+      } catch (error) {
+        setGoogleStatus("error");
+        setGoogleMessage(error instanceof Error ? error.message : "Google Photos import failed.");
+      }
+    }, delayMs);
+  };
+
+  const startGooglePhotosImport = async () => {
+    if (!isAdmin) return;
+
+    setGoogleStatus("starting");
+    setGoogleMessage("Starting a private Google Photos picker session...");
+
+    try {
+      const response = await fetch("/api/photos/google/session", {
+        method: "POST",
+      });
+      const result = (await response.json()) as GoogleSessionResponse;
+
+      if (response.status === 401 && result.authUrl) {
+        window.location.href = result.authUrl;
+        return;
+      }
+
+      if (!response.ok || !result.id || !result.pickerUri) {
+        throw new Error(result.error ?? "Could not start Google Photos.");
+      }
+
+      setGoogleStatus("picking");
+      setGoogleMessage("Google Photos opened in a new tab. Pick the memories; the book will make private permanent copies.");
+      window.open(result.pickerUri, "family-google-photos", "popup,width=980,height=760");
+      pollGooglePhotosSession(result.id, result.pollAfterMs ?? 3000);
+    } catch (error) {
+      setGoogleStatus("error");
+      setGoogleMessage(error instanceof Error ? error.message : "Could not start Google Photos.");
+    }
+  };
+
   const onFilesSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter(
       (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
@@ -372,6 +507,7 @@ export default function AdventureBook({
         url,
         kind: file.type.startsWith("video/") ? "video" : "image",
         mimeType: file.type,
+        source: "device",
       };
     });
     setImportedMedia((current) => [...media, ...current]);
@@ -761,7 +897,7 @@ export default function AdventureBook({
             <button className="dialog-close" onClick={() => setImportOpen(false)} aria-label="Close memory importer">×</button>
             <span className="handwritten-label">make it yours</span>
             <h2 id="import-title">Add family memories</h2>
-            <p className="import-lede">Choose photos and videos from the device in your hand, or prepare a Google Photos connection. {savedMetadataCount} selections are already recorded for this family.</p>
+            <p className="import-lede">Choose photos and videos from the device in your hand, or connect Google Photos for private permanent copies. {savedMetadataCount} selections are already recorded for this family.</p>
 
             {importView === "choose" ? (
               <>
@@ -772,11 +908,15 @@ export default function AdventureBook({
                     <small>Opens the secure photo chooser on iPhone, iPad, Mac, Android, or PC.</small>
                     <i>Choose media →</i>
                   </button>
-                  <button onClick={() => setImportView("google")}>
+                  <button
+                    onClick={() => setImportView("google")}
+                    disabled={!isAdmin}
+                    aria-disabled={!isAdmin}
+                  >
                     <span className="import-icon google-icon" aria-hidden="true"><i /><i /><i /><i /></span>
                     <b>Google Photos</b>
-                    <small>Family members pick exactly which Google Photos items to share.</small>
-                    <i>Connection details →</i>
+                    <small>{isAdmin ? "Admins pick exactly which Google Photos items to share." : "Google Photos importing is admin-only for now."}</small>
+                    <i>{isAdmin ? "Open picker →" : "Admin only"}</i>
                   </button>
                 </div>
                 <input
@@ -789,7 +929,7 @@ export default function AdventureBook({
                 />
                 {importedMedia.length > 0 && (
                   <div className="import-preview">
-                    <div><b>Fresh from your camera roll</b><button onClick={clearImportedMedia}>Clear previews</button></div>
+                    <div><b>Your family memory shelf</b><button onClick={clearImportedMedia}>Hide previews</button></div>
                     <div className="import-grid">
                       {importedMedia.map((media) => media.kind === "image" ? (
                         <figure key={media.id}><img src={media.url} alt={media.name} /><figcaption>{media.name}</figcaption></figure>
@@ -797,7 +937,7 @@ export default function AdventureBook({
                         <figure key={media.id}><video src={media.url} controls preload="metadata" /><figcaption>{media.name}</figcaption></figure>
                       ))}
                     </div>
-                    <p>{savedMetadataCount} selections are recorded in Neon. Preview files remain in this browser session until private object storage is connected.</p>
+                    <p>Google Photos memories are stored permanently in private Vercel Blob storage and reload with the book. Device-only previews remain in this browser session.</p>
                   </div>
                 )}
               </>
@@ -805,14 +945,29 @@ export default function AdventureBook({
               <div className="google-setup">
                 <button className="back-button" onClick={() => setImportView("choose")}>← Back</button>
                 <div className="google-badge"><span /><span /><span /><span /></div>
-                <h3>Google Photos is connection-ready</h3>
-                <p>Google requires a private OAuth client for this family site. Once that client is added, the Picker API opens Google Photos and returns only the items each person selects.</p>
+                <h3>{isAdmin ? "Pick from Google Photos" : "Admin Google Photos"}</h3>
+                <p>{googleMessage}</p>
                 <ol>
-                  <li><span>1</span><div><b>Create the private Google connection</b><small>Enable the Photos Picker API in a Google Cloud project.</small></div></li>
-                  <li><span>2</span><div><b>Family member chooses memories</b><small>Google handles sign-in and the secure picking screen.</small></div></li>
-                  <li><span>3</span><div><b>Selected items join the adventure book</b><small>No broad photo-library access is requested.</small></div></li>
+                  <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
+                  <li><span>2</span><div><b>Choose memories in Google Photos</b><small>The picker opens in a new tab and closes when selection is done.</small></div></li>
+                  <li><span>3</span><div><b>Selected items join the book</b><small>Private Vercel Blob copies hold the files; Neon keeps their family records.</small></div></li>
                 </ol>
-                <button className="primary-button" onClick={chooseFiles}>Use this device for now <span>→</span></button>
+                {isAdmin ? (
+                  <button
+                    className="primary-button"
+                    onClick={startGooglePhotosImport}
+                    disabled={googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"}
+                  >
+                    {googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"
+                      ? "Waiting for Google Photos..."
+                      : googleStatus === "ready"
+                        ? "Open Google Photos picker"
+                        : "Connect and pick memories"}
+                    <span aria-hidden="true">→</span>
+                  </button>
+                ) : (
+                  <button className="primary-button" onClick={chooseFiles}>Use this device instead <span>→</span></button>
+                )}
               </div>
             )}
           </div>

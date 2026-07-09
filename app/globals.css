@@ -376,6 +376,13 @@ video {
   box-shadow: 0 12px 0 #d95145, 0 20px 32px rgba(239, 106, 91, 0.24);
 }
 
+.primary-button:disabled,
+.import-options > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
 .primary-button span {
   font-size: 18px;
 }
@@ -1698,6 +1705,11 @@ video {
 .import-options > button:hover {
   border-color: var(--ink);
   transform: translateY(-5px);
+}
+
+.import-options > button:disabled:hover {
+  border-color: var(--line);
+  transform: none;
 }
 
 .import-options b {

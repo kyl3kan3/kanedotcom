@@ -130,3 +130,30 @@ test("Drizzle targets Neon PostgreSQL with family-scoped relational tables", () 
     assert.match(seed, new RegExp(`['"]${slug}['"]`));
   }
 });
+
+test("Google Photos imports become permanent private family memories", () => {
+  const packageJson = JSON.parse(read("package.json"));
+  const storage = read("lib", "memory-storage.ts");
+  const importer = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "sessions",
+    "[sessionId]",
+    "route.ts",
+  );
+  const delivery = read("app", "api", "memories", "[memoryId]", "route.ts");
+
+  assert.ok(packageJson.dependencies["@vercel/blob"]);
+  assert.match(storage, /put\(pathname, upstream\.body/);
+  assert.match(storage, /access:\s*["']private["']/);
+  assert.match(storage, /issueSignedToken/);
+  assert.match(storage, /presignUrl/);
+  assert.match(importer, /copyGoogleMediaToPrivateBlob/);
+  assert.match(importer, /status:\s*["']ready["']/);
+  assert.match(importer, /storageKey:\s*blob\.pathname/);
+  assert.match(delivery, /getFamilyContext\(\)/);
+  assert.match(delivery, /eq\(memories\.familyId, member\.familyId\)/);
+  assert.match(delivery, /getPrivateMemoryUrl/);
+});

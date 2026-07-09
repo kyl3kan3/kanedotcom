@@ -1,4 +1,4 @@
-import { and, count, eq, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import AdventureBook from "./adventure-book";
 import { signOutAction } from "./actions";
@@ -57,7 +57,13 @@ export default async function Home() {
   }
 
   const db = getDb();
-  const [stampRows, voteRows, currentVoteRows, memoryRows] = await Promise.all([
+  const [
+    stampRows,
+    voteRows,
+    currentVoteRows,
+    memoryCountRows,
+    readyMemoryRows,
+  ] = await Promise.all([
     db
       .select({ slug: trips.slug })
       .from(tripStamps)
@@ -95,21 +101,46 @@ export default async function Home() {
       .where(
         and(
           eq(memories.familyId, member.familyId),
-          eq(memories.status, "selected"),
+          inArray(memories.status, ["selected", "ready"]),
+          isNull(memories.deletedAt),
         ),
       ),
+    db
+      .select({
+        id: memories.id,
+        name: memories.originalName,
+        kind: memories.kind,
+        mimeType: memories.mimeType,
+      })
+      .from(memories)
+      .where(
+        and(
+          eq(memories.familyId, member.familyId),
+          eq(memories.source, "google_photos"),
+          eq(memories.status, "ready"),
+          isNull(memories.deletedAt),
+        ),
+      )
+      .orderBy(desc(memories.createdAt))
+      .limit(50),
   ]);
 
   return (
     <AdventureBook
       memberName={member.displayName || user.name || "Family explorer"}
       memberRole={member.role}
+      isAdmin={member.role === "owner"}
       initialStampedTrips={stampRows.map((row) => row.slug)}
       initialVoteCounts={Object.fromEntries(
         voteRows.map((row) => [row.optionSlug, row.total]),
       )}
       initialCurrentVote={currentVoteRows[0]?.optionSlug ?? null}
-      savedMemoryCount={memoryRows[0]?.total ?? 0}
+      initialMemories={readyMemoryRows.map((memory) => ({
+        ...memory,
+        source: "google_photos" as const,
+        url: `/api/memories/${memory.id}`,
+      }))}
+      savedMemoryCount={memoryCountRows[0]?.total ?? 0}
     />
   );
 }
