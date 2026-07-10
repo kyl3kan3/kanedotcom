@@ -25,6 +25,8 @@
 html {
   scroll-behavior: smooth;
   background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -64,6 +66,9 @@ a {
 
 button {
   color: inherit;
+  transition-property: transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
 }
 
 button:focus-visible,
@@ -74,8 +79,16 @@ video:focus-visible {
 }
 
 button:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
+
+h1,
+h2,
+h3 { text-wrap: balance; }
+
+p,
+li,
+figcaption { text-wrap: pretty; }
 
 img,
 video {
@@ -1772,6 +1785,102 @@ video {
 .google-icon i:nth-child(3), .google-badge span:nth-child(3) { background: #34a853; transform: rotate(90deg); }
 .google-icon i:nth-child(4), .google-badge span:nth-child(4) { background: #fbbc05; }
 
+.memory-shelf-section {
+  padding: 86px clamp(22px, 6vw, 96px) 96px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 209, 102, 0.24), transparent 42%),
+    var(--mist);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.memory-shelf-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 30px;
+  max-width: 1240px;
+  margin: 0 auto 34px;
+}
+
+.memory-shelf-heading h2 {
+  margin: 7px 0 8px;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(38px, 5vw, 66px);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.memory-shelf-heading p {
+  max-width: 610px;
+  margin: 0;
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 24px);
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.memory-shelf-grid figure {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 9px 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 4px 8px 22px rgba(24, 49, 83, 0.13);
+  transform: rotate(-1deg);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.memory-shelf-grid figure:nth-child(2n) { transform: rotate(1.2deg); }
+.memory-shelf-grid figure:nth-child(3n) { transform: rotate(-0.4deg); }
+.memory-shelf-grid figure:hover {
+  z-index: 1;
+  box-shadow: 8px 14px 28px rgba(24, 49, 83, 0.18);
+  transform: translateY(-5px) rotate(0);
+}
+
+.memory-shelf-grid img,
+.memory-shelf-grid video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--paper-deep);
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
+.memory-shelf-grid figcaption {
+  margin-top: 9px;
+  overflow: hidden;
+  font-family: "Caveat", cursive;
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-success {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 22px;
+  padding: 14px 16px;
+  background: rgba(79, 175, 131, 0.13);
+  border: 1px solid rgba(79, 175, 131, 0.35);
+  border-radius: 13px;
+}
+
+.import-success b { font-size: 13px; }
+.import-success span { color: var(--muted-ink); font-size: 11px; line-height: 1.45; }
+
 .import-preview {
   margin-top: 28px;
   padding-top: 24px;
@@ -2231,6 +2340,9 @@ video {
   .challenge-section { grid-template-columns: 1fr; }
   .challenge-copy { max-width: 600px; }
 
+  .memory-shelf-heading { align-items: flex-start; flex-direction: column; }
+  .memory-shelf-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
   .guide-grid { grid-template-columns: repeat(2, 1fr); }
   .guide-card:last-child { grid-column: 1 / -1; width: calc(50% - 12px); justify-self: center; }
 
@@ -2262,6 +2374,9 @@ video {
   .map-heading h2 { font-size: 48px; }
   .section-heading,
   .map-heading { margin-bottom: 42px; }
+  .memory-shelf-section { padding: 70px 20px 76px; }
+  .memory-shelf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .memory-shelf-grid figcaption { font-size: 15px; }
   .adventure-map { min-height: 690px; border-radius: 28% 26% 23% 27% / 4% 5% 4% 4%; }
   .map-pin { min-width: 150px; min-height: 62px; padding-right: 12px; }
   .pin-icon { width: 45px; height: 45px; font-size: 20px; }

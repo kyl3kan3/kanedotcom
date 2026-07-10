@@ -145,18 +145,26 @@ test("Google Photos imports become permanent private family memories", () => {
     "route.ts",
   );
   const delivery = read("app", "api", "memories", "[memoryId]", "route.ts");
+  const repair = read("scripts", "repair-google-memory-mime.mjs");
 
   assert.ok(packageJson.dependencies["@vercel/blob"]);
-  assert.match(storage, /put\(pathname, upstream\.body/);
+  assert.match(storage, /upstream\.headers\.get\(["']content-type["']\)/);
+  assert.match(storage, /put\(storedPathname, upstream\.body/);
+  assert.match(storage, /contentType:\s*upstreamMimeType/);
   assert.match(storage, /access:\s*["']private["']/);
   assert.match(storage, /issueSignedToken/);
   assert.match(storage, /presignUrl/);
   assert.match(importer, /copyGoogleMediaToPrivateBlob/);
   assert.match(importer, /status:\s*["']ready["']/);
   assert.match(importer, /storageKey:\s*blob\.pathname/);
+  assert.match(importer, /mimeType:\s*storedMimeType/);
+  assert.match(importer, /\[google-photos-import\] import failed/);
   assert.match(delivery, /getFamilyContext\(\)/);
   assert.match(delivery, /eq\(memories\.familyId, member\.familyId\)/);
   assert.match(delivery, /getPrivateMemoryUrl/);
+  assert.match(repair, /isJpeg/);
+  assert.match(repair, /mime_type = 'image\/jpeg'/);
+  assert.match(repair, /--apply/);
 });
 
 test("Google Photos connection is configuration-aware and browser-safe", () => {
@@ -219,6 +227,7 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(configuration, /https:\/\/kanedotcom\.com/);
   assert.match(sessionRoute, /configured:\s*false/);
   assert.match(sessionRoute, /timeoutAfterMs/);
+  assert.match(sessionRoute, /maxItemCount:\s*["']50["']/);
   assert.match(importer, /pollingConfig\?\.timeoutIn/);
   assert.match(importer, /Choose 50 or fewer Google Photos/);
   assert.match(client, /googlePollExpiryTimerRef/);
@@ -226,6 +235,8 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(client, /content-type/);
   assert.match(client, /window\.open\(\s*["']about:blank["']/);
   assert.match(client, /Open picker manually/);
+  assert.match(client, /setImportView\(["']choose["']\)/);
+  assert.match(client, /memory-shelf-section/);
   assert.match(callback, /try\s*{[\s\S]*oauth2\.googleapis\.com\/token/);
   assert.match(callback, /GOOGLE_PHOTOS_STATE_COOKIE/);
   assert.match(callback, /\/auth\/google-photos-return/);

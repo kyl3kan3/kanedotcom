@@ -47,7 +47,10 @@ export async function POST(request: Request) {
     const session = await fetchGooglePhotos<GooglePhotosSession>(
       "https://photospicker.googleapis.com/v1/sessions",
       accessToken,
-      { method: "POST", body: "{}" },
+      {
+        method: "POST",
+        body: JSON.stringify({ pickingConfig: { maxItemCount: "50" } }),
+      },
     );
 
     return NextResponse.json({

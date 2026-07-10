@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, like } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
@@ -17,7 +17,10 @@ import {
 import {
   copyGoogleMediaToPrivateBlob,
   deletePrivateMemoryBlob,
+  getGoogleMemoryDirectory,
   getGoogleMemoryPathname,
+  normalizeGoogleMediaFilename,
+  normalizeGoogleMediaMimeType,
 } from "@/lib/memory-storage";
 
 export const maxDuration = 300;
@@ -107,12 +110,20 @@ async function importCandidate(
 ) {
   const db = getDb();
   const [stored] = await db
-    .select({ id: memories.id })
+    .select({
+      id: memories.id,
+      kind: memories.kind,
+      mimeType: memories.mimeType,
+      name: memories.originalName,
+    })
     .from(memories)
     .where(
       and(
         eq(memories.familyId, member.familyId),
-        eq(memories.storageKey, item.pathname),
+        like(
+          memories.storageKey,
+          `${getGoogleMemoryDirectory(member.familyId, item.googleId)}%`,
+        ),
         eq(memories.status, "ready"),
         isNull(memories.deletedAt),
       ),
@@ -120,7 +131,14 @@ async function importCandidate(
     .limit(1);
 
   if (stored) {
-    return { memory: toImportedMemory(stored.id, item), saved: false };
+    return {
+      memory: toImportedMemory(stored.id, {
+        kind: stored.kind,
+        mimeType: stored.mimeType,
+        name: stored.name,
+      }),
+      saved: false,
+    };
   }
 
   const legacyStorageKey = `google_photos:${item.googleId}`;
@@ -143,14 +161,21 @@ async function importCandidate(
     mimeType: item.mimeType,
     pathname: item.pathname,
   });
+  const storedMimeType = blob.contentType;
+  const storedName = normalizeGoogleMediaFilename(item.name, storedMimeType);
+  const storedItem = {
+    ...item,
+    mimeType: storedMimeType,
+    name: storedName,
+  };
 
   try {
     const [saved] = legacy
       ? await db
           .update(memories)
           .set({
-            originalName: item.name,
-            mimeType: item.mimeType,
+            originalName: storedName,
+            mimeType: storedMimeType,
             kind: item.kind,
             storageKey: blob.pathname,
             status: "ready",
@@ -169,15 +194,15 @@ async function importCandidate(
             uploadedByMemberId: member.id,
             kind: item.kind,
             source: "google_photos",
-            originalName: item.name,
-            mimeType: item.mimeType,
+            originalName: storedName,
+            mimeType: storedMimeType,
             storageKey: blob.pathname,
             status: "ready",
           })
           .returning({ id: memories.id });
 
     if (!saved) throw new Error("The permanent memory record was not created.");
-    return { memory: toImportedMemory(saved.id, item), saved: true };
+    return { memory: toImportedMemory(saved.id, storedItem), saved: true };
   } catch (error) {
     await deletePrivateMemoryBlob(blob.pathname).catch(() => undefined);
     throw error;
@@ -257,10 +282,19 @@ export async function GET(
       });
     }
 
+    console.info("[google-photos-import] selection ready", {
+      session: sessionId.slice(0, 8),
+    });
+
     const { items: pickedItems, hasMore } = await listPickedItems(
       sessionId,
       accessToken,
     );
+    console.info("[google-photos-import] selected items listed", {
+      session: sessionId.slice(0, 8),
+      count: pickedItems.length,
+      hasMore,
+    });
     if (hasMore) {
       await deleteSession(sessionId, accessToken).catch(() => undefined);
       throw new Error(
@@ -278,13 +312,17 @@ export async function GET(
           : "image";
       if (!file.mimeType.startsWith(`${kind}/`)) return [];
 
-      const name = (file.filename || `google-photo-${item.id}`).slice(0, 240);
+      const mimeType = normalizeGoogleMediaMimeType(file.mimeType).slice(0, 120);
+      const name = normalizeGoogleMediaFilename(
+        (file.filename || `google-photo-${item.id}`).slice(0, 240),
+        mimeType,
+      );
       return [
         {
           googleId: item.id,
           baseUrl: file.baseUrl,
           name,
-          mimeType: file.mimeType.slice(0, 120),
+          mimeType,
           kind,
           pathname: getGoogleMemoryPathname(member.familyId, item.id, name),
         },
@@ -306,6 +344,13 @@ export async function GET(
     const saved = successes.filter((result) => result.saved).length;
     if (saved > 0) revalidatePath("/");
 
+    console.info("[google-photos-import] import complete", {
+      session: sessionId.slice(0, 8),
+      imported: successes.length,
+      saved,
+      failed: failures.length,
+    });
+
     return NextResponse.json({
       ready: true,
       imported: successes.map((result) => result.memory),
@@ -313,6 +358,11 @@ export async function GET(
       failed: failures.length,
     });
   } catch (error) {
+    console.error("[google-photos-import] import failed", {
+      session: sessionId.slice(0, 8),
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     if (error instanceof GooglePhotosApiError && error.status === 401) {
       await clearGoogleAccessToken();
       return NextResponse.json(

@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node db/seed.mjs"
+    "db:seed": "node db/seed.mjs",
+    "repair:google-memory-mime": "node scripts/repair-google-memory-mime.mjs"
   },
   "dependencies": {
     "@neondatabase/auth": "0.4.2-beta",

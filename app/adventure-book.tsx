@@ -594,6 +594,7 @@ export default function AdventureBook({
           setGoogleMessage(
             `${media.length} Google Photos memor${media.length === 1 ? "y is" : "ies are"} permanently in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}`,
           );
+          setImportView("choose");
         } else {
           setGoogleMessage("Google Photos finished, but no usable photos or videos were selected.");
         }
@@ -756,6 +757,7 @@ export default function AdventureBook({
         <nav className="desktop-nav" aria-label="Main navigation">
           <a href="#adventure-map">Trip map</a>
           <a href="#featured-trip">Stories</a>
+          {importedMedia.length > 0 && <a href="#memory-shelf">Memory shelf</a>}
           <a href="#challenge">Memory game</a>
         </nav>
         <div className="topbar-actions">
@@ -833,6 +835,44 @@ export default function AdventureBook({
           <span>★</span> 12 ADVENTURES <span>★</span> 4 STATES <span>★</span> 1,842 “ARE WE THERE YETS?” <span>★</span> ENDLESS SNACKS
         </div>
       </div>
+
+      {importedMedia.length > 0 && (
+        <section className="memory-shelf-section" id="memory-shelf">
+          <div className="memory-shelf-heading">
+            <div>
+              <span className="handwritten-label">fresh from the camera roll</span>
+              <h2>Our family memory shelf</h2>
+              <p>
+                {importedMedia.length} private memor{importedMedia.length === 1 ? "y" : "ies"} safely unpacked from Google Photos.
+              </p>
+            </div>
+            <button
+              className="text-button"
+              onClick={() => {
+                setImportView("choose");
+                setImportOpen(true);
+              }}
+            >
+              Open all memories <span aria-hidden="true">→</span>
+            </button>
+          </div>
+          <div className="memory-shelf-grid">
+            {importedMedia.slice(0, 8).map((media) =>
+              media.kind === "image" ? (
+                <figure key={media.id}>
+                  <img src={media.url} alt={media.name} loading="lazy" />
+                  <figcaption>{media.name}</figcaption>
+                </figure>
+              ) : (
+                <figure key={media.id}>
+                  <video src={media.url} controls preload="metadata" />
+                  <figcaption>{media.name}</figcaption>
+                </figure>
+              ),
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="map-section" id="adventure-map">
         <div className="section-heading map-heading">
@@ -1082,6 +1122,12 @@ export default function AdventureBook({
 
             {importView === "choose" ? (
               <>
+                {googleStatus === "done" && (
+                  <div className="import-success" role="status">
+                    <b>Memories unpacked!</b>
+                    <span>{googleMessage}</span>
+                  </div>
+                )}
                 <div className="import-options">
                   <button onClick={chooseFiles}>
                     <span className="import-icon apple-icon" aria-hidden="true">♥</span>
@@ -1113,7 +1159,7 @@ export default function AdventureBook({
                     <div><b>Your family memory shelf</b><button onClick={clearImportedMedia}>Hide previews</button></div>
                     <div className="import-grid">
                       {importedMedia.map((media) => media.kind === "image" ? (
-                        <figure key={media.id}><img src={media.url} alt={media.name} /><figcaption>{media.name}</figcaption></figure>
+                        <figure key={media.id}><img src={media.url} alt={media.name} loading="lazy" /><figcaption>{media.name}</figcaption></figure>
                       ) : (
                         <figure key={media.id}><video src={media.url} controls preload="metadata" /><figcaption>{media.name}</figcaption></figure>
                       ))}

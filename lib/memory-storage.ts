@@ -21,13 +21,52 @@ function googleItemPathSegment(itemId: string) {
   return Buffer.from(itemId).toString("base64url").slice(0, 220);
 }
 
+const browserExtensionByMimeType: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/avif": ".avif",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+};
+
+function cleanMimeType(value: string) {
+  return value.split(";", 1)[0].trim().toLowerCase();
+}
+
+export function normalizeGoogleMediaMimeType(mimeType: string) {
+  const normalized = cleanMimeType(mimeType);
+  return normalized === "image/heic" || normalized === "image/heif"
+    ? "image/jpeg"
+    : normalized;
+}
+
+export function normalizeGoogleMediaFilename(
+  filename: string,
+  mimeType: string,
+) {
+  const extension = browserExtensionByMimeType[cleanMimeType(mimeType)];
+  if (!extension) return filename;
+
+  if (/\.(?:heic|heif)$/i.test(filename)) {
+    return filename.replace(/\.(?:heic|heif)$/i, extension);
+  }
+
+  return filename;
+}
+
+export function getGoogleMemoryDirectory(familyId: string, itemId: string) {
+  return `families/${familyId}/google-photos/${googleItemPathSegment(itemId)}/`;
+}
+
 export function getGoogleMemoryPathname(
   familyId: string,
   itemId: string,
   filename: string,
 ) {
   const safeFilename = safePathSegment(filename, "google-memory");
-  return `families/${familyId}/google-photos/${googleItemPathSegment(itemId)}/${safeFilename}`;
+  return `${getGoogleMemoryDirectory(familyId, itemId)}${safeFilename}`;
 }
 
 export function isAllowedGoogleMediaUrl(url: URL) {
@@ -65,16 +104,28 @@ export async function copyGoogleMediaToPrivateBlob({
     throw new Error(`Google media download failed with status ${upstream.status}.`);
   }
 
+  const upstreamMimeType = cleanMimeType(
+    upstream.headers.get("content-type") || mimeType,
+  );
+  if (!upstreamMimeType.startsWith(`${kind}/`)) {
+    throw new Error("Google returned media in an unexpected format.");
+  }
+
+  const storedPathname = normalizeGoogleMediaFilename(
+    pathname,
+    upstreamMimeType,
+  );
+
   const contentLength = Number(upstream.headers.get("content-length"));
   const useMultipart =
     kind === "video" ||
     (Number.isFinite(contentLength) && contentLength > 100 * 1024 * 1024);
 
-  return put(pathname, upstream.body, {
+  return put(storedPathname, upstream.body, {
     access: "private",
     allowOverwrite: true,
     cacheControlMaxAge: 30 * 24 * 60 * 60,
-    contentType: mimeType,
+    contentType: upstreamMimeType,
     multipart: useMultipart,
   });
 }
