@@ -100,6 +100,40 @@ test("family authorization is server-derived and enforced before mutations", () 
   );
 });
 
+test("only Kyle can add adult or child accounts from family settings", () => {
+  const family = read("lib", "family.ts");
+  const accountPage = read("app", "account", "[path]", "page.tsx");
+  const accountActions = read("app", "account", "actions.ts");
+  const accessPanel = read("app", "account", "family-access-panel.tsx");
+
+  assert.match(
+    family,
+    /FAMILY_ACCOUNT_MANAGER_EMAIL\s*=\s*["']kyl3kan3@gmail\.com["']/,
+  );
+  assert.match(family, /identity\.userEmailVerified\s*===\s*true/);
+  assert.match(family, /identity\.memberRole\s*===\s*["']owner["']/);
+  assert.match(
+    family,
+    /identity\.memberAuthUserId\s*===\s*identity\.userId/,
+  );
+  assert.match(accountActions, /requireFamilyAccountManager\(\)/);
+  assert.match(
+    accountActions,
+    /z\.enum\(\[["']adult["'],\s*["']child["']\]\)/,
+  );
+  assert.match(accountActions, /familyId:\s*context\.member\.familyId/);
+  assert.match(accountActions, /\.onConflictDoUpdate\(/);
+  assert.match(accountActions, /setWhere:\s*and\(/);
+  assert.match(accountActions, /ne\(familyMembers\.role,\s*["']owner["']\)/);
+  assert.doesNotMatch(accountActions, /formData\.get\(["']familyId["']\)/);
+  assert.doesNotMatch(accountActions, /z\.enum\([^)]*["']owner["']/);
+  assert.match(accountPage, /path\s*===\s*["']settings["']/);
+  assert.match(accountPage, /isFamilyAccountManager\(/);
+  assert.match(accessPanel, /data-testid=["']family-access-manager["']/);
+  assert.match(accessPanel, /\/auth\/sign-up/);
+  assert.doesNotMatch(accessPanel, /option\s+value=["']owner["']/);
+});
+
 test("memory-game stamps use real family-scoped trip IDs and memory counts", () => {
   const actions = read("app", "actions.ts");
   const page = read("app", "page.tsx");

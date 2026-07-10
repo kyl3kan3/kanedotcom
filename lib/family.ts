@@ -3,6 +3,27 @@ import { getDb } from "@/db";
 import { familyMembers } from "@/db/schema";
 import { getAuth } from "@/lib/auth/server";
 
+export const FAMILY_ACCOUNT_MANAGER_EMAIL = "kyl3kan3@gmail.com";
+
+export function isFamilyAccountManager(identity: {
+  userId: string | null | undefined;
+  userEmail: string | null | undefined;
+  userEmailVerified: boolean | null | undefined;
+  memberAuthUserId: string | null | undefined;
+  memberInvitedEmail: string | null | undefined;
+  memberRole: string | null | undefined;
+}) {
+  return (
+    identity.userEmailVerified === true &&
+    identity.memberRole === "owner" &&
+    identity.memberAuthUserId === identity.userId &&
+    identity.userEmail?.trim().toLowerCase() ===
+      FAMILY_ACCOUNT_MANAGER_EMAIL &&
+    identity.memberInvitedEmail?.trim().toLowerCase() ===
+      FAMILY_ACCOUNT_MANAGER_EMAIL
+  );
+}
+
 export async function getFamilyContext() {
   const { data } = await getAuth().getSession();
   const user = data?.user;
@@ -82,6 +103,23 @@ export async function requireFamilyAdmin() {
   const context = await requireFamilyContext();
   if (context.member.role !== "owner") {
     throw new Error("Only the family admin can do that.");
+  }
+  return context;
+}
+
+export async function requireFamilyAccountManager() {
+  const context = await requireFamilyAdmin();
+  if (
+    !isFamilyAccountManager({
+      userId: context.user.id,
+      userEmail: context.user.email,
+      userEmailVerified: context.user.emailVerified,
+      memberAuthUserId: context.member.authUserId,
+      memberInvitedEmail: context.member.invitedEmail,
+      memberRole: context.member.role,
+    })
+  ) {
+    throw new Error("Only the private family account manager can do that.");
   }
   return context;
 }
