@@ -345,3 +345,9 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(envExample, /^OPENAI_API_KEY=/m);
   assert.match(envExample, /^AI_ORGANIZER_MODEL=/m);
 });
+
+test("trip dates use one family timezone during server and client rendering", () => {
+  const client = read("app", "adventure-book.tsx");
+
+  assert.match(client, /timeZone:\s*["']America\/Chicago["']/);
+});

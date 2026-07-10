@@ -72,11 +72,13 @@ function formatTripDateRange(startAt: string | null, endAt: string | null) {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "America/Chicago",
   });
   const endLabel = end.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "America/Chicago",
   });
   return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
 }
