@@ -26,6 +26,7 @@ export async function proxy(request: NextRequest) {
       "/auth/verify-email",
       "/auth/reset-password",
       "/auth/recover-account",
+      "/auth/google-photos-return",
     ].includes(request.nextUrl.pathname)
   ) {
     return NextResponse.next();

@@ -5,7 +5,6 @@ import {
   GOOGLE_PHOTOS_TOKEN_COOKIE,
   getCookieOptions,
   getGooglePhotosConfig,
-  requireGooglePhotosAdmin,
 } from "@/lib/google-photos";
 
 type GoogleTokenResponse = {
@@ -15,23 +14,19 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 
-function redirectHome(request: Request, status: "ready" | "error" | "setup") {
-  const url = new URL("/", request.url);
-  url.searchParams.set("googlePhotos", status);
-  url.hash = "top";
+function redirectThroughSameSite(
+  request: Request,
+  status: "ready" | "error" | "setup",
+) {
+  const url = new URL("/auth/google-photos-return", request.url);
+  url.searchParams.set("status", status);
   return NextResponse.redirect(url);
 }
 
 export async function GET(request: Request) {
-  try {
-    await requireGooglePhotosAdmin();
-  } catch {
-    return redirectHome(request, "error");
-  }
-
   const requestUrl = new URL(request.url);
   if (requestUrl.searchParams.has("error")) {
-    return redirectHome(request, "error");
+    return redirectThroughSameSite(request, "error");
   }
 
   const code = requestUrl.searchParams.get("code");
@@ -40,14 +35,14 @@ export async function GET(request: Request) {
   const storedState = cookieStore.get(GOOGLE_PHOTOS_STATE_COOKIE)?.value;
 
   if (!code || !state || !storedState || state !== storedState) {
-    return redirectHome(request, "error");
+    return redirectThroughSameSite(request, "error");
   }
 
   let configuration: ReturnType<typeof getGooglePhotosConfig>;
   try {
     configuration = getGooglePhotosConfig(request);
   } catch {
-    return redirectHome(request, "setup");
+    return redirectThroughSameSite(request, "setup");
   }
 
   const { clientId, clientSecret, redirectUri } = configuration;
@@ -69,11 +64,11 @@ export async function GET(request: Request) {
     token = (await tokenResponse.json()) as GoogleTokenResponse;
     if (!tokenResponse.ok || !token.access_token) {
       cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
-      return redirectHome(request, "error");
+      return redirectThroughSameSite(request, "error");
     }
   } catch {
     cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
-    return redirectHome(request, "error");
+    return redirectThroughSameSite(request, "error");
   }
 
   cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
@@ -83,5 +78,5 @@ export async function GET(request: Request) {
     getCookieOptions(Math.max(60, Math.min((token.expires_in ?? 3600) - 60, 3300))),
   );
 
-  return redirectHome(request, "ready");
+  return redirectThroughSameSite(request, "ready");
 }

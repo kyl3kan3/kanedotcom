@@ -194,6 +194,12 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
     "callback",
     "route.ts",
   );
+  const returnPage = read(
+    "app",
+    "auth",
+    "google-photos-return",
+    "page.tsx",
+  );
   const client = read("app", "adventure-book.tsx");
   const proxy = read("proxy.ts");
   const envExample = read(".env.example");
@@ -221,8 +227,14 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(client, /window\.open\(\s*["']about:blank["']/);
   assert.match(client, /Open picker manually/);
   assert.match(callback, /try\s*{[\s\S]*oauth2\.googleapis\.com\/token/);
+  assert.match(callback, /GOOGLE_PHOTOS_STATE_COOKIE/);
+  assert.match(callback, /\/auth\/google-photos-return/);
+  assert.doesNotMatch(callback, /requireGooglePhotosAdmin/);
+  assert.match(returnPage, /window\.location\.replace/);
+  assert.match(returnPage, /allowedStatuses/);
   assert.match(proxy, /VERCEL_ENV\s*===\s*["']production["']/);
   assert.match(proxy, /kanedotcom\.com/);
+  assert.match(proxy, /\/auth\/google-photos-return/);
   assert.match(proxy, /startsWith\(["']\/api\/photos\/google\/["']\)/);
   assert.match(proxy, /\/api\/photos\/google\/[\s\S]*NextResponse\.next\(\)/);
 
