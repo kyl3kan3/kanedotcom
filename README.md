@@ -136,18 +136,39 @@ video; the website never receives broad or background access to the library.
 The admin-only flow uses the
 [Google Photos Picker API](https://developers.google.com/photos/picker/guides/get-started-picker).
 It obtains OAuth consent, creates a picker session, opens Google's secure
-picker, polls using Google's recommended interval and timeout, copies up to 50
-selected items into private Vercel Blob storage, records them in Neon, and
-deletes the Picker session. Capture time, dimensions, camera details, and safe
-photo/video metadata are kept for trip grouping. Google strips location EXIF
-from Picker downloads, so the site does not claim precise locations from those
-files. It never requests broad background library access.
+picker, polls using Google's recommended interval and timeout, and accepts up
+to 500 selected items. The server retrieves and copies one 10-item page per
+request, passing opaque page cursors in a POST body so they do not appear in
+request URLs. It reports progress to the browser and deletes the Picker session
+only after the browser acknowledges the final page with a separate idempotent
+finalize request. Each item is copied into private Vercel Blob storage and
+recorded in Neon. Capture time, dimensions, camera details, and safe photo/video
+metadata are kept for trip grouping. Google strips location EXIF from Picker
+downloads, so the site does not claim precise locations from those files. It
+never requests broad background library access.
+
+Each page makes one copy attempt per item. If Google, Blob, or Postgres has a
+transient failure, the server keeps the Picker session and tells the browser to
+retry that same page with backoff. Replayed pages are idempotent, so records
+already saved during an interrupted page are reused rather than duplicated.
+Unsupported or not-yet-ready selections are reported separately as skipped.
+
+Google Picker `baseUrl` values are authorized, bearer-token-protected download
+links that remain available for only about 60 minutes and can expire sooner.
+They are used transiently during import and are never stored or logged. The app
+therefore cannot reliably stream old memories from Google on demand; permanent
+private Blob copies are required for a durable family book.
 
 After a successful admin import, the organizer automatically prepares private
 trip drafts. It uses capture-time gaps as the strongest signal and visible scene
 similarity as supporting evidence. OpenAI request storage is disabled; only
 small working previews are sent, and every draft requires admin approval before
 it can assign memories or captions to a trip.
+
+The organizer prepares at most 50 unassigned memories per review so the admin
+can verify each proposed chapter without sending hundreds of previews in one AI
+request. If a larger import leaves more memories queued, approve the current
+drafts and run the organizer again for the next private batch.
 
 Google Cloud and Vercel still need matching credentials before the button can
 connect:

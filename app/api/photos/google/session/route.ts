@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       accessToken,
       {
         method: "POST",
-        body: JSON.stringify({ pickingConfig: { maxItemCount: "50" } }),
+        body: JSON.stringify({ pickingConfig: { maxItemCount: "500" } }),
       },
     );
 

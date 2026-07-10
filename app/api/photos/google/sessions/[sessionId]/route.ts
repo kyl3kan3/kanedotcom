@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, eq, isNull, like } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
@@ -54,6 +55,8 @@ type ImportedMemory = {
   url: string;
 };
 
+const MAX_PAGE_TOKEN_LENGTH = 4096;
+
 function parseGoogleCaptureTime(value: string | undefined) {
   if (!value) return null;
   const capturedAt = new Date(value);
@@ -109,36 +112,94 @@ function pollAfterMs(session: GooglePhotosSession) {
   );
 }
 
-async function listPickedItems(sessionId: string, accessToken: string) {
-  const items: GooglePickedMediaItem[] = [];
-  let pageToken: string | undefined;
+async function readImportRequest(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { valid: false as const };
+  }
 
-  do {
-    const url = new URL("https://photospicker.googleapis.com/v1/mediaItems");
-    url.searchParams.set("sessionId", sessionId);
-    url.searchParams.set("pageSize", "50");
-    if (pageToken) url.searchParams.set("pageToken", pageToken);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { valid: false as const };
+  }
 
-    const page = await fetchGooglePhotos<MediaItemsResponse>(
-      url.toString(),
-      accessToken,
-      { headers: { "Content-Type": "application/json" } },
-    );
-    items.push(...(page.mediaItems ?? []));
-    pageToken = page.nextPageToken;
-  } while (pageToken && items.length < 50);
+  const payload = body as Record<string, unknown>;
+  const keys = Object.keys(payload);
+  if (
+    keys.length === 1 &&
+    keys[0] === "finalize" &&
+    payload.finalize === true
+  ) {
+    return { valid: true as const, finalize: true as const };
+  }
+
+  if (keys.length !== 1 || keys[0] !== "pageToken") {
+    return { valid: false as const };
+  }
+
+  const pageToken = payload.pageToken;
+  if (pageToken === null) {
+    return {
+      valid: true as const,
+      finalize: false as const,
+      pageToken: undefined,
+    };
+  }
+
+  if (
+    typeof pageToken !== "string" ||
+    pageToken.length === 0 ||
+    pageToken.length > MAX_PAGE_TOKEN_LENGTH
+  ) {
+    return { valid: false as const };
+  }
+
+  return { valid: true as const, finalize: false as const, pageToken };
+}
+
+async function listPickedItems(
+  sessionId: string,
+  accessToken: string,
+  abortSignal: AbortSignal,
+  pageToken?: string,
+) {
+  const url = new URL("https://photospicker.googleapis.com/v1/mediaItems");
+  url.searchParams.set("sessionId", sessionId);
+  url.searchParams.set("pageSize", "10");
+  if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+  const page = await fetchGooglePhotos<MediaItemsResponse>(
+    url.toString(),
+    accessToken,
+    {
+      headers: { "Content-Type": "application/json" },
+      signal: abortSignal,
+    },
+  );
 
   return {
-    items: items.slice(0, 50),
-    hasMore: Boolean(pageToken) || items.length > 50,
+    items: page.mediaItems ?? [],
+    nextPageToken: page.nextPageToken || null,
   };
 }
 
 async function deleteSession(sessionId: string, accessToken: string) {
-  await fetch(`https://photospicker.googleapis.com/v1/sessions/${sessionId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await fetch(
+    `https://photospicker.googleapis.com/v1/sessions/${sessionId}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+
+  if (!response.ok && response.status !== 404) {
+    throw new GooglePhotosApiError(
+      response.status,
+      `Google Photos session cleanup failed (${response.status}).`,
+    );
+  }
 }
 
 function toImportedMemory(
@@ -155,10 +216,9 @@ function toImportedMemory(
   };
 }
 
-async function importCandidate(
-  item: ImportCandidate,
-  accessToken: string,
-  member: Awaited<ReturnType<typeof requireGooglePhotosAdmin>>,
+async function findReadyGoogleMemoryBySourceId(
+  familyId: string,
+  googleId: string,
 ) {
   const db = getDb();
   const [stored] = await db
@@ -167,6 +227,7 @@ async function importCandidate(
       kind: memories.kind,
       mimeType: memories.mimeType,
       name: memories.originalName,
+      storageKey: memories.storageKey,
       capturedAt: memories.capturedAt,
       captureTimeSource: memories.captureTimeSource,
       width: memories.width,
@@ -178,21 +239,66 @@ async function importCandidate(
     .from(memories)
     .where(
       and(
-        eq(memories.familyId, member.familyId),
-        like(
-          memories.storageKey,
-          `${getGoogleMemoryDirectory(member.familyId, item.googleId)}%`,
-        ),
+        eq(memories.familyId, familyId),
+        eq(memories.source, "google_photos"),
+        eq(memories.sourceMediaId, googleId),
         eq(memories.status, "ready"),
         isNull(memories.deletedAt),
       ),
     )
     .limit(1);
 
+  return stored;
+}
+
+async function importCandidate(
+  item: ImportCandidate,
+  accessToken: string,
+  abortSignal: AbortSignal,
+  member: Awaited<ReturnType<typeof requireGooglePhotosAdmin>>,
+) {
+  const db = getDb();
+  let stored = await findReadyGoogleMemoryBySourceId(
+    member.familyId,
+    item.googleId,
+  );
+
+  if (!stored) {
+    [stored] = await db
+      .select({
+        id: memories.id,
+        kind: memories.kind,
+        mimeType: memories.mimeType,
+        name: memories.originalName,
+        storageKey: memories.storageKey,
+        capturedAt: memories.capturedAt,
+        captureTimeSource: memories.captureTimeSource,
+        width: memories.width,
+        height: memories.height,
+        cameraMake: memories.cameraMake,
+        cameraModel: memories.cameraModel,
+        sourceMetadata: memories.sourceMetadata,
+      })
+      .from(memories)
+      .where(
+        and(
+          eq(memories.familyId, member.familyId),
+          like(
+            memories.storageKey,
+            `${getGoogleMemoryDirectory(member.familyId, item.googleId)}%`,
+          ),
+          eq(memories.status, "ready"),
+          isNull(memories.deletedAt),
+        ),
+      )
+      .limit(1);
+  }
+
   if (stored) {
     await db
       .update(memories)
       .set({
+        source: "google_photos",
         sourceMediaId: item.googleId,
         capturedAt: item.capturedAt ?? stored.capturedAt,
         captureTimeSource: item.capturedAt
@@ -244,6 +350,7 @@ async function importCandidate(
 
   const blob = await copyGoogleMediaToPrivateBlob({
     accessToken,
+    abortSignal,
     baseUrl: item.baseUrl,
     kind: item.kind,
     mimeType: item.mimeType,
@@ -262,6 +369,7 @@ async function importCandidate(
       ? await db
           .update(memories)
           .set({
+            source: "google_photos",
             originalName: storedName,
             mimeType: storedMimeType,
             kind: item.kind,
@@ -282,6 +390,7 @@ async function importCandidate(
             and(
               eq(memories.id, legacy.id),
               eq(memories.familyId, member.familyId),
+              eq(memories.storageKey, legacyStorageKey),
             ),
           )
           .returning({ id: memories.id })
@@ -312,6 +421,30 @@ async function importCandidate(
     if (!saved) throw new Error("The permanent memory record was not created.");
     return { memory: toImportedMemory(saved.id, storedItem), saved: true };
   } catch (error) {
+    let concurrentlySaved: Awaited<
+      ReturnType<typeof findReadyGoogleMemoryBySourceId>
+    >;
+    try {
+      concurrentlySaved = await findReadyGoogleMemoryBySourceId(
+        member.familyId,
+        item.googleId,
+      );
+    } catch {
+      // The write may have committed even if its response was interrupted. If we
+      // cannot verify the row, keep this attempt's Blob rather than risk data loss.
+      throw error;
+    }
+
+    if (concurrentlySaved) {
+      if (concurrentlySaved.storageKey !== blob.pathname) {
+        await deletePrivateMemoryBlob(blob.pathname).catch(() => undefined);
+      }
+      return {
+        memory: toImportedMemory(concurrentlySaved.id, concurrentlySaved),
+        saved: false,
+      };
+    }
+
     await deletePrivateMemoryBlob(blob.pathname).catch(() => undefined);
     throw error;
   }
@@ -320,6 +453,7 @@ async function importCandidate(
 async function importInBatches(
   candidates: ImportCandidate[],
   accessToken: string,
+  abortSignal: AbortSignal,
   member: Awaited<ReturnType<typeof requireGooglePhotosAdmin>>,
 ) {
   const successes: Array<{ memory: ImportedMemory; saved: boolean }> = [];
@@ -328,7 +462,9 @@ async function importInBatches(
   for (let index = 0; index < candidates.length; index += 3) {
     const batch = candidates.slice(index, index + 3);
     const results = await Promise.allSettled(
-      batch.map((item) => importCandidate(item, accessToken, member)),
+      batch.map((item) =>
+        importCandidate(item, accessToken, abortSignal, member),
+      ),
     );
 
     results.forEach((result) => {
@@ -347,8 +483,8 @@ async function importInBatches(
   return { successes, failures };
 }
 
-export async function GET(
-  _request: Request,
+export async function POST(
+  request: Request,
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   let member: Awaited<ReturnType<typeof requireGooglePhotosAdmin>>;
@@ -370,11 +506,26 @@ export async function GET(
   }
 
   const { sessionId } = await params;
+  const importRequest = await readImportRequest(request);
+  if (!importRequest.valid) {
+    return googlePhotosError("Invalid Google Photos import request.", 400);
+  }
 
   try {
+    if (importRequest.finalize) {
+      await deleteSession(sessionId, accessToken);
+      return NextResponse.json({ ready: true, finalized: true });
+    }
+
+    // One deadline covers session lookup, listing, and every stream in this
+    // page. Reusing it prevents a later batch from starting a fresh 240-second
+    // clock and running past Vercel's 300-second function limit.
+    const importAbortSignal = AbortSignal.timeout(240_000);
+
     const session = await fetchGooglePhotos<GooglePhotosSession>(
       `https://photospicker.googleapis.com/v1/sessions/${sessionId}`,
       accessToken,
+      { signal: importAbortSignal },
     );
 
     if (!session.mediaItemsSet) {
@@ -390,25 +541,18 @@ export async function GET(
       });
     }
 
-    console.info("[google-photos-import] selection ready", {
-      session: sessionId.slice(0, 8),
-    });
+    console.info("[google-photos-import] selection ready");
 
-    const { items: pickedItems, hasMore } = await listPickedItems(
+    const { items: pickedItems, nextPageToken } = await listPickedItems(
       sessionId,
       accessToken,
+      importAbortSignal,
+      importRequest.pageToken,
     );
     console.info("[google-photos-import] selected items listed", {
-      session: sessionId.slice(0, 8),
       count: pickedItems.length,
-      hasMore,
+      hasMore: Boolean(nextPageToken),
     });
-    if (hasMore) {
-      await deleteSession(sessionId, accessToken).catch(() => undefined);
-      throw new Error(
-        "Choose 50 or fewer Google Photos at a time so every memory can be copied safely.",
-      );
-    }
 
     const candidates = pickedItems.flatMap((item) => {
       const file = item.mediaFile;
@@ -441,7 +585,11 @@ export async function GET(
           name,
           mimeType,
           kind,
-          pathname: getGoogleMemoryPathname(member.familyId, item.id, name),
+          pathname: getGoogleMemoryPathname(
+            member.familyId,
+            item.id,
+            `${randomUUID()}-${name.slice(-100)}`,
+          ),
           capturedAt: parseGoogleCaptureTime(item.createTime),
           width: positiveInteger(metadata?.width),
           height: positiveInteger(metadata?.height),
@@ -455,35 +603,66 @@ export async function GET(
     const { successes, failures } = await importInBatches(
       candidates,
       accessToken,
+      importAbortSignal,
       member,
     );
 
-    await deleteSession(sessionId, accessToken).catch(() => undefined);
-
-    if (successes.length === 0 && failures.length > 0) {
-      throw new Error(`No memories were saved. ${failures[0]}`);
-    }
-
     const saved = successes.filter((result) => result.saved).length;
+    const skipped = pickedItems.length - candidates.length;
     if (saved > 0) revalidatePath("/");
 
-    console.info("[google-photos-import] import complete", {
-      session: sessionId.slice(0, 8),
+    if (failures.length > 0) {
+      console.warn("[google-photos-import] import page will retry", {
+        imported: successes.length,
+        saved,
+        failed: failures.length,
+        skipped,
+        processed: pickedItems.length,
+      });
+
+      return NextResponse.json(
+        {
+          ready: true,
+          importing: true,
+          final: false,
+          retryable: true,
+          retryAfterMs: 2000,
+          nextPageToken: null,
+          imported: successes.map((result) => result.memory),
+          saved,
+          failed: failures.length,
+          skipped,
+          processed: pickedItems.length,
+          error: "Some Google Photos could not be copied yet. Retrying this page is safe.",
+        },
+        { status: 503, headers: { "Retry-After": "2" } },
+      );
+    }
+
+    console.info("[google-photos-import] import page complete", {
       imported: successes.length,
       saved,
-      failed: failures.length,
+      failed: 0,
+      skipped,
+      processed: pickedItems.length,
+      hasMore: Boolean(nextPageToken),
     });
 
     return NextResponse.json({
       ready: true,
+      importing: Boolean(nextPageToken),
+      final: !nextPageToken,
+      nextPageToken,
       imported: successes.map((result) => result.memory),
       saved,
-      failed: failures.length,
+      failed: 0,
+      skipped,
+      processed: pickedItems.length,
     });
   } catch (error) {
     console.error("[google-photos-import] import failed", {
-      session: sessionId.slice(0, 8),
-      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      status: error instanceof GooglePhotosApiError ? error.status : undefined,
     });
 
     if (error instanceof GooglePhotosApiError && error.status === 401) {

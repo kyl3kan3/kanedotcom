@@ -224,6 +224,10 @@ test("Google Photos imports become permanent private family memories", () => {
   assert.match(storage, /put\(storedPathname, upstream\.body/);
   assert.match(storage, /contentType:\s*upstreamMimeType/);
   assert.match(storage, /access:\s*["']private["']/);
+  assert.match(storage, /signal:\s*abortSignal/);
+  assert.match(storage, /abortSignal/);
+  assert.doesNotMatch(storage, /AbortSignal\.timeout/);
+  assert.match(storage, /allowOverwrite:\s*false/);
   assert.match(storage, /issueSignedToken/);
   assert.match(storage, /presignUrl/);
   assert.match(importer, /copyGoogleMediaToPrivateBlob/);
@@ -299,10 +303,56 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(configuration, /https:\/\/kanedotcom\.com/);
   assert.match(sessionRoute, /configured:\s*false/);
   assert.match(sessionRoute, /timeoutAfterMs/);
-  assert.match(sessionRoute, /maxItemCount:\s*["']50["']/);
+  assert.match(sessionRoute, /maxItemCount:\s*["']500["']/);
   assert.match(importer, /pollingConfig\?\.timeoutIn/);
-  assert.match(importer, /Choose 50 or fewer Google Photos/);
+  assert.match(importer, /searchParams\.set\(["']pageSize["'],\s*["']10["']\)/);
+  assert.match(importer, /const importAbortSignal = AbortSignal\.timeout\(240_000\)/);
+  assert.match(importer, /importCandidate\(item, accessToken, abortSignal, member\)/);
+  assert.match(importer, /status !== 404/);
+  assert.match(importer, /export async function POST/);
+  assert.match(importer, /await request\.json\(\)/);
+  assert.match(importer, /MAX_PAGE_TOKEN_LENGTH\s*=\s*4096/);
+  assert.doesNotMatch(importer, /request\.url/);
+  assert.match(importer, /payload\.finalize\s*===\s*true/);
+  assert.match(importer, /keys\.length\s*===\s*1/);
+  assert.match(importer, /if\s*\(importRequest\.finalize\)/);
+  assert.match(importer, /ready:\s*true,\s*finalized:\s*true/);
+  assert.match(importer, /nextPageToken:\s*page\.nextPageToken\s*\|\|\s*null/);
+  assert.match(importer, /importing:\s*Boolean\(nextPageToken\)/);
+  assert.match(importer, /final:\s*!nextPageToken/);
+  assert.match(importer, /processed:\s*pickedItems\.length/);
+  assert.doesNotMatch(importer, /if\s*\(!nextPageToken\)\s*\{[\s\S]*deleteSession/);
+  assert.doesNotMatch(importer, /importCandidateWithRetry|IMPORT_ATTEMPTS/);
+  assert.match(importer, /if\s*\(failures\.length\s*>\s*0\)/);
+  assert.match(importer, /retryable:\s*true/);
+  assert.match(importer, /retryAfterMs:\s*2000/);
+  assert.match(importer, /status:\s*503/);
+  assert.match(importer, /headers:\s*\{\s*["']Retry-After["']:\s*["']2["']/);
+  assert.match(importer, /findReadyGoogleMemoryBySourceId/);
+  assert.match(
+    importer,
+    /let stored = await findReadyGoogleMemoryBySourceId\([\s\S]*if \(!stored\)[\s\S]*getGoogleMemoryDirectory/,
+  );
+  assert.match(importer, /eq\(memories\.sourceMediaId,\s*googleId\)/);
+  assert.match(importer, /if\s*\(concurrentlySaved\)/);
+  assert.match(importer, /randomUUID\(\)/);
+  assert.match(importer, /concurrentlySaved\.storageKey\s*!==\s*blob\.pathname/);
+  assert.match(importer, /eq\(memories\.storageKey,\s*legacyStorageKey\)/);
+  assert.match(importer, /failed:\s*failures\.length/);
+  assert.match(importer, /skipped,/);
+  assert.doesNotMatch(
+    importer,
+    /console\.(?:info|warn|error)\([^)]*\bsession\s*:/,
+  );
+  assert.doesNotMatch(importer, /Choose 50 or fewer Google Photos/);
+  assert.doesNotMatch(importer, /do\s*\{[\s\S]*while\s*\(pageToken/);
+  assert.doesNotMatch(
+    importer,
+    /console\.(?:info|warn|error)\([^)]*\b(?:baseUrl|pageToken)\b/,
+  );
   assert.match(client, /googlePollExpiryTimerRef/);
+  assert.match(client, /googlePollRequestInFlightRef/);
+  assert.match(client, /retryProgress/);
   assert.match(client, /readJsonResponse/);
   assert.match(client, /content-type/);
   assert.match(client, /window\.open\(\s*["']about:blank["']/);
@@ -328,6 +378,9 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   );
   assert.ok(popupIndex >= 0 && popupIndex < sessionFetchIndex);
   assert.doesNotMatch(readme, /connection shown in the interface is not wired/i);
+  assert.match(readme, /up\s+to 500 selected items/i);
+  assert.match(readme, /10-item page/i);
+  assert.match(readme, /60 minutes/i);
 });
 
 test("Google metadata is retained and existing imports can be enriched", () => {
@@ -413,6 +466,10 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(client, /data-testid=["']create-approved-trips["']/);
   assert.match(client, /MessageResponse/);
   assert.match(client, /void generateTripDrafts\(\)/);
+  assert.match(organizer, /\.limit\(50\)/);
+  assert.match(client, /queuedForLater/);
+  assert.match(client, /next AI review/);
+  assert.match(page, /\.limit\(60\)/);
   assert.match(page, /eq\(trips\.source,\s*["']ai["']\)/);
   assert.match(envExample, /^OPENAI_API_KEY=/m);
   assert.match(envExample, /^AI_ORGANIZER_MODEL=/m);

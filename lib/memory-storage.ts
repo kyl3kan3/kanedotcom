@@ -79,12 +79,14 @@ export function isAllowedGoogleMediaUrl(url: URL) {
 
 export async function copyGoogleMediaToPrivateBlob({
   accessToken,
+  abortSignal,
   baseUrl,
   kind,
   mimeType,
   pathname,
 }: {
   accessToken: string;
+  abortSignal: AbortSignal;
   baseUrl: string;
   kind: MemoryKind;
   mimeType: string;
@@ -98,6 +100,7 @@ export async function copyGoogleMediaToPrivateBlob({
   const downloadUrl = `${googleUrl.toString()}${kind === "video" ? "=dv" : "=d"}`;
   const upstream = await fetch(downloadUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: abortSignal,
   });
 
   if (!upstream.ok || !upstream.body) {
@@ -123,7 +126,8 @@ export async function copyGoogleMediaToPrivateBlob({
 
   return put(storedPathname, upstream.body, {
     access: "private",
-    allowOverwrite: true,
+    abortSignal,
+    allowOverwrite: false,
     cacheControlMaxAge: 30 * 24 * 60 * 60,
     contentType: upstreamMimeType,
     multipart: useMultipart,

@@ -129,7 +129,7 @@ export default async function Home() {
         ),
       )
       .orderBy(desc(memories.createdAt))
-      .limit(50),
+      .limit(60),
     db
       .select({
         tripId: trips.id,

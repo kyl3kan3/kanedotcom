@@ -209,6 +209,9 @@ type OrganizerApplyResponse = {
 
 type GoogleImportResponse = {
   ready?: boolean;
+  importing?: boolean;
+  final?: boolean;
+  finalized?: boolean;
   pollAfterMs?: number;
   timeoutAfterMs?: number;
   needsAuth?: boolean;
@@ -216,7 +219,22 @@ type GoogleImportResponse = {
   imported?: ImportedMedia[];
   saved?: number;
   failed?: number;
+  skipped?: number;
+  processed?: number;
+  nextPageToken?: string | null;
+  retryable?: boolean;
+  retryAfterMs?: number;
   error?: string;
+};
+
+type GoogleImportProgress = {
+  pageToken?: string;
+  imported: ImportedMedia[];
+  saved: number;
+  failed: number;
+  skipped: number;
+  processed: number;
+  retryCount: number;
 };
 
 type AdventureBookProps = {
@@ -282,6 +300,7 @@ export default function AdventureBook({
     | "starting"
     | "picking"
     | "polling"
+    | "importing"
     | "done"
     | "error"
   >("idle");
@@ -307,6 +326,7 @@ export default function AdventureBook({
   const googlePollTimerRef = useRef<number | null>(null);
   const googlePollExpiryTimerRef = useRef<number | null>(null);
   const googlePollActiveSessionRef = useRef<string | null>(null);
+  const googlePollRequestInFlightRef = useRef(false);
   const bookTrips: BookTrip[] = generatedTrips.map((trip, index) => {
     const theme = tripThemes[index % tripThemes.length];
     return {
@@ -385,7 +405,7 @@ export default function AdventureBook({
         if (response.ok && result.configured) {
           setGoogleStatus("ready");
           setGoogleMessage(
-            "Google Photos is configured. Connect the admin account and choose up to 50 memories.",
+            "Google Photos is configured. Connect the admin account and choose up to 500 memories.",
           );
           return;
         }
@@ -508,6 +528,14 @@ export default function AdventureBook({
 
   const showOrganizerReview = (result: OrganizerResponse) => {
     const drafts = result.drafts ?? [];
+    const draftedMemoryCount = drafts.reduce(
+      (total, draft) => total + draft.memories.length,
+      0,
+    );
+    const queuedForLater = Math.max(
+      0,
+      (result.unassignedCount ?? 0) - draftedMemoryCount,
+    );
     setTripDrafts(drafts);
     setOrganizerRunId(result.runId ?? null);
     setUnassignedMemoryCount(result.unassignedCount ?? 0);
@@ -515,7 +543,7 @@ export default function AdventureBook({
     if (drafts.length > 0) {
       setOrganizerState("review");
       setOrganizerMessage(
-        `${drafts.length} trip draft${drafts.length === 1 ? " is" : "s are"} ready. Review them before adding anything to the book.`,
+        `${drafts.length} trip draft${drafts.length === 1 ? " is" : "s are"} ready from ${draftedMemoryCount} memor${draftedMemoryCount === 1 ? "y" : "ies"}. Review them before adding anything to the book.${queuedForLater > 0 ? ` ${queuedForLater} more will stay safely queued for the next AI review after you approve this batch.` : ""}`,
       );
     } else {
       setOrganizerState("idle");
@@ -624,20 +652,110 @@ export default function AdventureBook({
     googlePollTimerRef.current = null;
     googlePollExpiryTimerRef.current = null;
     googlePollActiveSessionRef.current = null;
+    googlePollRequestInFlightRef.current = false;
     setPendingGoogleSession(null);
+  };
+
+  const googlePhotosRetryDelay = (
+    retryCount: number,
+    suggestedDelayMs = 0,
+  ) =>
+    Math.min(
+      8000,
+      Math.max(suggestedDelayMs, 1000 * 2 ** retryCount),
+    );
+
+  const finalizeGooglePhotosSession = async (sessionId: string) => {
+    for (let attempt = 0; attempt <= 3; attempt += 1) {
+      try {
+        const response = await fetch(
+          `/api/photos/google/sessions/${encodeURIComponent(sessionId)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ finalize: true }),
+          },
+        );
+        const result = await readJsonResponse<GoogleImportResponse>(response);
+        if (response.ok && result.finalized) return true;
+        if (response.ok) return false;
+        if (response.status < 500 && response.status !== 429) return false;
+      } catch {
+        // A short retry can finish cleanup after a transient network failure.
+      }
+
+      if (attempt < 3) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(
+            resolve,
+            googlePhotosRetryDelay(attempt),
+          );
+        });
+      }
+    }
+
+    return false;
   };
 
   const pollGooglePhotosSession = (
     sessionId: string,
     delayMs = 3000,
     timeoutAfterMs?: number,
+    progress: GoogleImportProgress = {
+      imported: [],
+      saved: 0,
+      failed: 0,
+      skipped: 0,
+      processed: 0,
+      retryCount: 0,
+    },
   ) => {
-    const safeDelay = Math.min(30_000, Math.max(1000, delayMs));
+    const safeDelay =
+      progress.retryCount > 0
+        ? Math.min(8000, Math.max(500, delayMs))
+        : progress.pageToken
+          ? Math.min(1000, Math.max(100, delayMs))
+          : Math.min(30_000, Math.max(1000, delayMs));
     googlePollActiveSessionRef.current = sessionId;
 
+    const retryCurrentPage = (
+      reason: string,
+      suggestedDelayMs = 0,
+      nextProgress: GoogleImportProgress = progress,
+    ) => {
+      if (progress.retryCount >= 3) return false;
+      const retryCount = progress.retryCount + 1;
+      const retryDelayMs = googlePhotosRetryDelay(
+        progress.retryCount,
+        suggestedDelayMs,
+      );
+      setGoogleStatus(
+        nextProgress.processed > 0 || nextProgress.imported.length > 0
+          ? "importing"
+          : "polling",
+      );
+      setGoogleMessage(
+        `${reason} Retrying this batch (${retryCount}/3)...`,
+      );
+      pollGooglePhotosSession(
+        sessionId,
+        retryDelayMs,
+        timeoutAfterMs,
+        { ...nextProgress, retryCount },
+      );
+      return true;
+    };
+
     if (timeoutAfterMs && googlePollExpiryTimerRef.current === null) {
-      googlePollExpiryTimerRef.current = window.setTimeout(() => {
+      const expireGooglePhotosSession = () => {
         if (googlePollActiveSessionRef.current !== sessionId) return;
+        if (googlePollRequestInFlightRef.current) {
+          googlePollExpiryTimerRef.current = window.setTimeout(
+            expireGooglePhotosSession,
+            5 * 60 * 1000,
+          );
+          return;
+        }
         if (googlePollTimerRef.current !== null) {
           window.clearTimeout(googlePollTimerRef.current);
         }
@@ -648,9 +766,15 @@ export default function AdventureBook({
         setGooglePickerUrl(null);
         setGoogleStatus("error");
         setGoogleMessage(
-          "The Google Photos picker timed out. Start a new picker when you are ready.",
+          progress.processed > 0
+            ? `The Google Photos import paused after ${progress.processed} selected memories. The copies already saved are safe; start a new picker to continue.`
+            : "The Google Photos picker timed out. Start a new picker when you are ready.",
         );
-      }, Math.max(1000, timeoutAfterMs));
+      };
+      googlePollExpiryTimerRef.current = window.setTimeout(
+        expireGooglePhotosSession,
+        Math.max(1000, timeoutAfterMs),
+      );
     }
 
     if (googlePollTimerRef.current !== null) {
@@ -659,11 +783,18 @@ export default function AdventureBook({
 
     googlePollTimerRef.current = window.setTimeout(async () => {
       googlePollTimerRef.current = null;
+      googlePollRequestInFlightRef.current = true;
       try {
         const response = await fetch(
           `/api/photos/google/sessions/${encodeURIComponent(sessionId)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pageToken: progress.pageToken ?? null }),
+          },
         );
         const result = await readJsonResponse<GoogleImportResponse>(response);
+        googlePollRequestInFlightRef.current = false;
         if (googlePollActiveSessionRef.current !== sessionId) return;
 
         if (response.status === 401 && result.authUrl) {
@@ -674,7 +805,48 @@ export default function AdventureBook({
         }
 
         if (!response.ok) {
-          throw new Error(result.error ?? "Google Photos import failed.");
+          const retryAfterSeconds = Number(
+            response.headers.get("Retry-After"),
+          );
+          const retryAfterMs =
+            result.retryAfterMs ??
+            (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+              ? retryAfterSeconds * 1000
+              : 0);
+          const canRetry =
+            result.retryable ||
+            response.status === 408 ||
+            response.status === 429 ||
+            response.status >= 500;
+          const partialMedia = result.imported ?? [];
+          const retryMedia = [...progress.imported];
+          const retryIds = new Set(retryMedia.map((item) => item.id));
+          for (const item of partialMedia) {
+            if (retryIds.has(item.id)) continue;
+            retryIds.add(item.id);
+            retryMedia.push(item);
+          }
+          const retryProgress = {
+            ...progress,
+            imported: retryMedia,
+            saved: progress.saved + (result.saved ?? 0),
+          };
+          if (
+            canRetry &&
+            retryCurrentPage(
+              result.error ?? "Google Photos paused this batch.",
+              retryAfterMs,
+              retryProgress,
+            )
+          ) {
+            return;
+          }
+
+          stopGooglePhotosPolling();
+          setGooglePickerUrl(null);
+          setGoogleStatus("error");
+          setGoogleMessage(result.error ?? "Google Photos import failed.");
+          return;
         }
 
         if (!result.ready) {
@@ -684,36 +856,108 @@ export default function AdventureBook({
             sessionId,
             result.pollAfterMs ?? 3000,
             result.timeoutAfterMs,
+            { ...progress, retryCount: 0 },
           );
           return;
         }
 
-        const media = result.imported ?? [];
-        const newlySaved = result.saved ?? media.length;
-        const failed = result.failed ?? 0;
+        const batchMedia = result.imported ?? [];
+        const accumulatedMedia = [...progress.imported];
+        const accumulatedIds = new Set(
+          accumulatedMedia.map((item) => item.id),
+        );
+        for (const item of batchMedia) {
+          if (accumulatedIds.has(item.id)) continue;
+          accumulatedIds.add(item.id);
+          accumulatedMedia.push(item);
+        }
+
+        const batchSaved = result.saved ?? batchMedia.length;
+        const batchFailed = result.failed ?? 0;
+        const batchSkipped = result.skipped ?? 0;
+        const accumulatedProgress: GoogleImportProgress = {
+          pageToken: result.nextPageToken ?? undefined,
+          imported: accumulatedMedia,
+          saved: progress.saved + batchSaved,
+          failed: progress.failed + batchFailed,
+          skipped: progress.skipped + batchSkipped,
+          processed:
+            progress.processed +
+            (result.processed ??
+              batchMedia.length + batchFailed + batchSkipped),
+          retryCount: 0,
+        };
+
+        if (result.nextPageToken) {
+          setGoogleStatus("importing");
+          setGoogleMessage(
+            `Selected Google media is streaming server-to-server into private permanent copies... ${accumulatedProgress.processed} processed, ${accumulatedProgress.imported.length} ready for the book${accumulatedProgress.skipped > 0 ? `, ${accumulatedProgress.skipped} skipped` : ""}.`,
+          );
+
+          if (googlePollExpiryTimerRef.current !== null) {
+            window.clearTimeout(googlePollExpiryTimerRef.current);
+            googlePollExpiryTimerRef.current = null;
+          }
+          pollGooglePhotosSession(
+            sessionId,
+            150,
+            Math.max(result.timeoutAfterMs ?? 0, 30 * 60 * 1000),
+            accumulatedProgress,
+          );
+          return;
+        }
+
+        let finalized = true;
+        if (result.final) {
+          setGoogleStatus("importing");
+          setGoogleMessage(
+            `Finishing the private import... ${accumulatedProgress.processed} selected memories processed.`,
+          );
+          finalized = await finalizeGooglePhotosSession(sessionId);
+          if (googlePollActiveSessionRef.current !== sessionId) return;
+        }
+        const finalizeWarning = finalized
+          ? ""
+          : " Google’s temporary picker session could not be closed immediately and will expire automatically.";
+
+        const media = accumulatedProgress.imported;
+        const newlySaved = accumulatedProgress.saved;
+        const failed = accumulatedProgress.failed;
+        const skipped = accumulatedProgress.skipped;
+        const processed = accumulatedProgress.processed;
         if (media.length > 0) {
           setImportedMedia((current) => {
             const incomingIds = new Set(media.map((item) => item.id));
             return [...media, ...current.filter((item) => !incomingIds.has(item.id))];
           });
           setSavedMetadataCount((current) => current + newlySaved);
-          setSyncMessage(`${media.length} Google memor${media.length === 1 ? "y" : "ies"} stored privately`);
+          setSyncMessage(`${processed} Google memor${processed === 1 ? "y" : "ies"} processed privately`);
           setGoogleMessage(
-            `${media.length} Google Photos memor${media.length === 1 ? "y is" : "ies are"} permanently in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}`,
+            `${processed} Google Photos memor${processed === 1 ? "y was" : "ies were"} processed, with ${media.length} permanently available in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}${skipped > 0 ? ` ${skipped} unsupported ${skipped === 1 ? "item was" : "items were"} skipped.` : ""}${finalizeWarning}`,
           );
           setImportView("choose");
-          if (newlySaved > 0) {
-            setImportOpen(false);
-            void generateTripDrafts();
-          }
+          setImportOpen(false);
+          void generateTripDrafts();
         } else {
-          setGoogleMessage("Google Photos finished, but no usable photos or videos were selected.");
+          setGoogleMessage(
+            processed > 0
+              ? `Google Photos finished, but none of the ${processed} selected items could be added.${skipped > 0 ? ` ${skipped} unsupported ${skipped === 1 ? "item was" : "items were"} skipped.` : " Try those items again."}${finalizeWarning}`
+              : `Google Photos finished, but no usable photos or videos were selected.${finalizeWarning}`,
+          );
         }
         stopGooglePhotosPolling();
         setGooglePickerUrl(null);
         setGoogleStatus("done");
       } catch (error) {
+        googlePollRequestInFlightRef.current = false;
         if (googlePollActiveSessionRef.current !== sessionId) return;
+        if (
+          retryCurrentPage(
+            "The connection to Google Photos was interrupted.",
+          )
+        ) {
+          return;
+        }
         stopGooglePhotosPolling();
         setGooglePickerUrl(null);
         setGoogleStatus("error");
@@ -754,7 +998,7 @@ export default function AdventureBook({
       }
 
       setGoogleStatus("picking");
-      setGoogleMessage("Google Photos opened in a new tab. Pick the memories; the book will make private permanent copies.");
+      setGoogleMessage("Google Photos opened in a new tab. Pick up to 500 memories; selected media will stream server-to-server into private permanent copies.");
       if (pickerWindow && !pickerWindow.closed) {
         pickerWindow.location.href = result.pickerUri;
         googlePollExpiryTimerRef.current = null;
@@ -1454,7 +1698,7 @@ export default function AdventureBook({
             <button className="dialog-close" onClick={() => setImportOpen(false)} aria-label="Close memory importer">×</button>
             <span className="handwritten-label">make it yours</span>
             <h2 id="import-title">Add family memories</h2>
-            <p className="import-lede">Choose photos and videos from the device in your hand, or connect Google Photos for private permanent copies. {savedMetadataCount} selections are already recorded for this family.</p>
+            <p className="import-lede">Choose photos and videos from the device in your hand, or let selected Google Photos media stream server-to-server into private permanent copies. {savedMetadataCount} selections are already recorded for this family.</p>
 
             {importView === "choose" ? (
               <>
@@ -1478,7 +1722,7 @@ export default function AdventureBook({
                   >
                     <span className="import-icon google-icon" aria-hidden="true"><i /><i /><i /><i /></span>
                     <b>Google Photos</b>
-                    <small>{isAdmin ? "Admins pick exactly which Google Photos items to share." : "Google Photos importing is admin-only for now."}</small>
+                    <small>{isAdmin ? "Admins can pick up to 500 Google Photos items at once." : "Google Photos importing is admin-only for now."}</small>
                     <i>{isAdmin ? "Open picker →" : "Admin only"}</i>
                   </button>
                 </div>
@@ -1494,13 +1738,17 @@ export default function AdventureBook({
                   <div className="import-preview">
                     <div><b>Your family memory shelf</b><button onClick={clearImportedMedia}>Hide previews</button></div>
                     <div className="import-grid">
-                      {importedMedia.map((media) => media.kind === "image" ? (
+                      {importedMedia.slice(0, 60).map((media) => media.kind === "image" ? (
                         <figure key={media.id}><img src={media.url} alt={media.name} loading="lazy" /><figcaption>{media.name}</figcaption></figure>
                       ) : (
                         <figure key={media.id}><video src={media.url} controls preload="metadata" /><figcaption>{media.name}</figcaption></figure>
                       ))}
                     </div>
-                    <p>Google Photos memories are stored permanently in private Vercel Blob storage and reload with the book. Device-only previews remain in this browser session.</p>
+                    {importedMedia.length > 60 && (
+                      <p><b>{importedMedia.length - 60} more memories</b> are safely stored in the family book.</p>
+                    )}
+                    <p>This shelf keeps things quick by showing up to 60 previews at a time; the full saved count stays on the book cover.</p>
+                    <p>Selected Google Photos media streams server-to-server into private Vercel Blob storage and reloads with the book. Device-only previews remain in this browser session.</p>
                   </div>
                 )}
               </>
@@ -1512,8 +1760,8 @@ export default function AdventureBook({
                 <p>{googleMessage}</p>
                 <ol>
                   <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
-                  <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 50 at a time. The secure picker closes when selection is done.</small></div></li>
-                  <li><span>3</span><div><b>Selected items join the book</b><small>Private Vercel Blob copies hold the files; Neon keeps their family records.</small></div></li>
+                  <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 500 at a time. The secure picker closes when selection is done.</small></div></li>
+                  <li><span>3</span><div><b>Selected items join the book</b><small>Selected media streams server-to-server into private permanent Vercel Blob copies; Neon keeps the family records.</small></div></li>
                 </ol>
                 {isAdmin ? (
                   <div className="google-picker-actions">
@@ -1525,15 +1773,18 @@ export default function AdventureBook({
                         googleStatus === "unconfigured" ||
                         googleStatus === "starting" ||
                         googleStatus === "picking" ||
-                        googleStatus === "polling"
+                        googleStatus === "polling" ||
+                        googleStatus === "importing"
                       }
                     >
                       {googleStatus === "idle"
                         ? "Checking Google setup..."
                         : googleStatus === "unconfigured"
                           ? "Google setup needed"
-                          : googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling"
-                            ? "Waiting for Google Photos..."
+                          : googleStatus === "starting" || googleStatus === "picking" || googleStatus === "polling" || googleStatus === "importing"
+                            ? googleStatus === "importing"
+                              ? "Importing Google Photos..."
+                              : "Waiting for Google Photos..."
                             : googleStatus === "ready"
                               ? "Open Google Photos picker"
                               : "Connect and pick memories"}
