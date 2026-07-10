@@ -37,6 +37,22 @@ type GeneratedTrip = {
   memories: GeneratedMemory[];
 };
 
+type GallerySource = {
+  id: string;
+  kind: "image" | "video";
+  url: string;
+};
+
+type GalleryState = {
+  items: Array<{
+    id: string;
+    src: string;
+    alt: string;
+  }>;
+  index: number;
+  label: string;
+};
+
 type BookTrip = GeneratedTrip & {
   accent: string;
   accentSoft: string;
@@ -274,9 +290,7 @@ export default function AdventureBook({
   const [bookOpen, setBookOpen] = useState(false);
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
   const [stampedTrips, setStampedTrips] = useState(initialStampedTrips);
-  const [lightbox, setLightbox] = useState<
-    { src: string; alt: string } | undefined
-  >();
+  const [gallery, setGallery] = useState<GalleryState>();
   const [importOpen, setImportOpen] = useState(false);
   const [organizerOpen, setOrganizerOpen] = useState(false);
   const [organizerState, setOrganizerState] = useState<
@@ -325,6 +339,14 @@ export default function AdventureBook({
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
+  const galleryDialogRef = useRef<HTMLDivElement>(null);
+  const galleryCloseRef = useRef<HTMLButtonElement>(null);
+  const galleryReturnFocusRef = useRef<HTMLElement | null>(null);
+  const galleryPointerStartRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
   const googlePollTimerRef = useRef<number | null>(null);
   const googlePollExpiryTimerRef = useRef<number | null>(null);
@@ -356,6 +378,9 @@ export default function AdventureBook({
     (memory) => memory.kind === "image",
   ).length;
   const videoCount = statisticMemories.length - photoCount;
+  const shelfPhotos = importedMedia.filter(
+    (memory) => memory.kind === "image",
+  );
   const chapterHeroPhotos = bookTrips.flatMap((trip) =>
     trip.photos.map((photo) => ({ ...photo, chapterTitle: trip.title })),
   );
@@ -375,6 +400,56 @@ export default function AdventureBook({
       })),
   ];
 
+  const openGallery = (
+    sources: GallerySource[],
+    selectedId: string,
+    label: string,
+  ) => {
+    const items = sources
+      .filter((source) => source.kind === "image")
+      .map((source) => ({
+        id: source.id,
+        src: source.url,
+        alt:
+          label === "Our family memory shelf"
+            ? familyMemoryAlt()
+            : familyMemoryAlt(label),
+      }));
+    if (items.length === 0) return;
+
+    const selectedIndex = items.findIndex((item) => item.id === selectedId);
+    galleryReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setGallery({
+      items,
+      index: selectedIndex >= 0 ? selectedIndex : 0,
+      label,
+    });
+  };
+
+  const stepGallery = (direction: -1 | 1) => {
+    setGallery((current) => {
+      if (!current || current.items.length < 2) return current;
+      return {
+        ...current,
+        index:
+          (current.index + direction + current.items.length) %
+          current.items.length,
+      };
+    });
+  };
+
+  const closeGallery = () => {
+    setGallery(undefined);
+    window.requestAnimationFrame(() => {
+      galleryReturnFocusRef.current?.focus({ preventScroll: true });
+    });
+  };
+
+  const galleryIsOpen = Boolean(gallery);
+
   useEffect(() => {
     return () => {
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -387,6 +462,18 @@ export default function AdventureBook({
       googlePollActiveSessionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!galleryIsOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => galleryCloseRef.current?.focus());
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [galleryIsOpen]);
 
   useEffect(() => {
     if (
@@ -461,17 +548,61 @@ export default function AdventureBook({
   }, []);
 
   useEffect(() => {
-    if (!lightbox && !importOpen && !organizerOpen) return;
+    if (!gallery && !importOpen && !organizerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (gallery) {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const direction = event.key === "ArrowLeft" ? -1 : 1;
+          setGallery((current) => {
+            if (!current || current.items.length < 2) return current;
+            return {
+              ...current,
+              index:
+                (current.index + direction + current.items.length) %
+                current.items.length,
+            };
+          });
+          return;
+        }
+
+        if (event.key === "Tab") {
+          const focusable = Array.from(
+            galleryDialogRef.current?.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+            ) ?? [],
+          );
+          const first = focusable[0];
+          const last = focusable.at(-1);
+          if (!first || !last) return;
+
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+          return;
+        }
+      }
+
       if (event.key === "Escape") {
-        setLightbox(undefined);
+        if (gallery) {
+          event.preventDefault();
+          setGallery(undefined);
+          window.requestAnimationFrame(() => {
+            galleryReturnFocusRef.current?.focus({ preventScroll: true });
+          });
+          return;
+        }
         setImportOpen(false);
         setOrganizerOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [lightbox, importOpen, organizerOpen]);
+  }, [gallery, importOpen, organizerOpen]);
 
   const selectTrip = (tripId: string) => {
     setActiveTripId(tripId);
@@ -487,6 +618,19 @@ export default function AdventureBook({
       });
       featuredHeadingRef.current?.focus({ preventScroll: true });
     });
+  };
+
+  const surpriseMe = () => {
+    if (bookTrips.length === 0) return;
+    const currentId = activeTrip?.id ?? "family";
+    const chapterSeed = Array.from(currentId).reduce(
+      (total, character) => total + character.charCodeAt(0),
+      0,
+    );
+    const offset =
+      bookTrips.length > 1 ? 1 + (chapterSeed % (bookTrips.length - 1)) : 0;
+    const nextTrip = bookTrips[(activeTripIndex + offset) % bookTrips.length];
+    selectTrip(nextTrip.id);
   };
 
   const openBook = () => {
@@ -1231,7 +1375,23 @@ export default function AdventureBook({
             {importedMedia.slice(0, 8).map((media) =>
               media.kind === "image" ? (
                 <figure key={media.id}>
-                  <img src={media.url} alt="Private family memory" loading="lazy" />
+                  <button
+                    type="button"
+                    className="memory-preview-button"
+                    onClick={() =>
+                      openGallery(
+                        shelfPhotos,
+                        media.id,
+                        "Our family memory shelf",
+                      )
+                    }
+                    aria-label={`Open photo ${shelfPhotos.findIndex((photo) => photo.id === media.id) + 1} of ${shelfPhotos.length} from the family memory shelf`}
+                  >
+                    <img src={media.url} alt="" loading="lazy" />
+                    <span className="photo-open-badge" aria-hidden="true">
+                      ↗
+                    </span>
+                  </button>
                 </figure>
               ) : (
                 <figure key={media.id}>
@@ -1253,16 +1413,27 @@ export default function AdventureBook({
           <div className="generated-trips-heading">
             <div>
               <span className="handwritten-label">approved by the family admin</span>
-                <h2>Our real family chapter shelf</h2>
+              <h2>Our real family chapter shelf</h2>
             </div>
-            <p>
-              Capture dates and known calendar holidays label these chapters.
-              Every chapter here was reviewed by a family admin before it
-              joined the book.
-            </p>
+            <div className="generated-trips-heading-copy">
+              <p>
+                Capture dates and known calendar holidays label these chapters.
+                Every chapter here was reviewed by a family admin before it
+                joined the book.
+              </p>
+              <button
+                type="button"
+                className="surprise-chapter-button"
+                onClick={surpriseMe}
+                aria-controls="featured-trip"
+                aria-label="Surprise me with a family chapter"
+              >
+                <span aria-hidden="true">✦</span> Surprise me
+              </button>
+            </div>
           </div>
           <div className="generated-trip-grid">
-            {generatedTrips.map((trip, tripIndex) => (
+            {bookTrips.map((trip, tripIndex) => (
               <article className="generated-trip-card" key={trip.id}>
                 <div className="generated-trip-card-topline">
                   <span>CHAPTER {String(tripIndex + 1).padStart(2, "0")}</span>
@@ -1278,11 +1449,23 @@ export default function AdventureBook({
                   {trip.memories.slice(0, 6).map((memory) => (
                     <figure key={memory.id}>
                       {memory.kind === "image" ? (
-                        <img
-                          src={memory.url}
-                          alt={familyMemoryAlt(trip.title)}
-                          loading="lazy"
-                        />
+                        <button
+                          type="button"
+                          className="chapter-preview-button"
+                          onClick={() =>
+                            openGallery(trip.photos, memory.id, trip.title)
+                          }
+                          aria-label={`Open photo ${trip.photos.findIndex((photo) => photo.id === memory.id) + 1} of ${trip.photos.length} from ${trip.title}`}
+                        >
+                          <img
+                            src={memory.url}
+                            alt=""
+                            loading="lazy"
+                          />
+                          <span className="photo-open-badge" aria-hidden="true">
+                            ↗
+                          </span>
+                        </button>
                       ) : (
                         <video
                           src={memory.url}
@@ -1418,10 +1601,11 @@ export default function AdventureBook({
                           className={`stack-photo ${positionClass}`}
                           onClick={() =>
                             relative === 0
-                              ? setLightbox({
-                                  src: photo.url,
-                                  alt: familyMemoryAlt(activeTrip.title),
-                                })
+                              ? openGallery(
+                                  activeTrip.photos,
+                                  photo.id,
+                                  activeTrip.title,
+                                )
                               : setPhotoIndex(index)
                           }
                           aria-label={
@@ -1683,11 +1867,100 @@ export default function AdventureBook({
         </div>
       </footer>
 
-      {lightbox && (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={() => setLightbox(undefined)}>
-          <div className="lightbox" role="dialog" aria-modal="true" aria-label="Trip photo" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="dialog-close" onClick={() => setLightbox(undefined)} aria-label="Close photo">×</button>
-            <img src={lightbox.src} alt={lightbox.alt} />
+      {gallery && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={closeGallery}
+        >
+          <div
+            ref={galleryDialogRef}
+            className="lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gallery-title"
+            aria-describedby="gallery-instructions"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="gallery-title" className="visually-hidden">
+              {gallery.label}
+            </h2>
+            <p id="gallery-instructions" className="visually-hidden">
+              Use the previous and next buttons, arrow keys, or a horizontal
+              swipe to browse these family photos.
+            </p>
+            <button
+              ref={galleryCloseRef}
+              type="button"
+              className="dialog-close"
+              onClick={closeGallery}
+              aria-label="Close photo gallery"
+            >
+              ×
+            </button>
+            <div
+              className="lightbox-stage"
+              onPointerDown={(event) => {
+                if ((event.target as HTMLElement).closest("button")) return;
+                galleryPointerStartRef.current = {
+                  pointerId: event.pointerId,
+                  x: event.clientX,
+                  y: event.clientY,
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerUp={(event) => {
+                const start = galleryPointerStartRef.current;
+                galleryPointerStartRef.current = null;
+                if (!start || start.pointerId !== event.pointerId) return;
+
+                const horizontalDistance = event.clientX - start.x;
+                const verticalDistance = event.clientY - start.y;
+                if (
+                  Math.abs(horizontalDistance) < 48 ||
+                  Math.abs(horizontalDistance) <= Math.abs(verticalDistance)
+                ) {
+                  return;
+                }
+                stepGallery(horizontalDistance > 0 ? -1 : 1);
+              }}
+              onPointerCancel={() => {
+                galleryPointerStartRef.current = null;
+              }}
+            >
+              <img
+                key={gallery.items[gallery.index].id}
+                src={gallery.items[gallery.index].src}
+                alt={gallery.items[gallery.index].alt}
+                draggable={false}
+              />
+              {gallery.items.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="lightbox-nav previous"
+                    onClick={() => stepGallery(-1)}
+                    aria-label="Previous photo"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    className="lightbox-nav next"
+                    onClick={() => stepGallery(1)}
+                    aria-label="Next photo"
+                  >
+                    →
+                  </button>
+                </>
+              )}
+              <span className="lightbox-counter" aria-hidden="true">
+                Photo {gallery.index + 1} / {gallery.items.length}
+              </span>
+              <span className="visually-hidden" role="status" aria-live="polite">
+                Photo {gallery.index + 1} of {gallery.items.length} from {gallery.label}
+              </span>
+            </div>
           </div>
         </div>
       )}

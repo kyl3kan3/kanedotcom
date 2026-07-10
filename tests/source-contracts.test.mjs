@@ -172,6 +172,22 @@ test("approved trips power the cover, memory trail, chapter reader, and game", (
   assert.doesNotMatch(client, /baseVotes|1,842|example badges/i);
 });
 
+test("family photos open an accessible keyboard and touch gallery", () => {
+  const client = read("app", "adventure-book.tsx");
+  const styles = read("app", "globals.css");
+
+  assert.match(client, /className=["']memory-preview-button["']/);
+  assert.match(client, /className=["']chapter-preview-button["']/);
+  assert.match(client, /aria-labelledby=["']gallery-title["']/);
+  assert.match(client, /event\.key === ["']ArrowLeft["']/);
+  assert.match(client, /setPointerCapture\(event\.pointerId\)/);
+  assert.match(client, /const\s+surpriseMe\s*=/);
+  assert.match(client, /aria-controls=["']featured-trip["']/);
+  assert.match(styles, /\.lightbox-stage\s*\{/);
+  assert.match(styles, /touch-action:\s*pan-y/);
+  assert.match(styles, /\.memory-shelf-grid figure:focus-within/);
+});
+
 test("Drizzle targets Neon PostgreSQL with family-scoped relational tables", () => {
   const config = read("drizzle.config.ts");
   const database = read("db", "index.ts");
