@@ -15,6 +15,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
+  // These route handlers perform their own owner/admin authorization and must
+  // return JSON (or complete the OAuth callback) instead of an HTML login page.
+  if (request.nextUrl.pathname.startsWith("/api/photos/google/")) {
+    return NextResponse.next();
+  }
+
   if (
     [
       "/auth/verify-email",

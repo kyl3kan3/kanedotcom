@@ -215,11 +215,15 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(importer, /pollingConfig\?\.timeoutIn/);
   assert.match(importer, /Choose 50 or fewer Google Photos/);
   assert.match(client, /googlePollExpiryTimerRef/);
+  assert.match(client, /readJsonResponse/);
+  assert.match(client, /content-type/);
   assert.match(client, /window\.open\(\s*["']about:blank["']/);
   assert.match(client, /Open picker manually/);
   assert.match(callback, /try\s*{[\s\S]*oauth2\.googleapis\.com\/token/);
   assert.match(proxy, /VERCEL_ENV\s*===\s*["']production["']/);
   assert.match(proxy, /kanedotcom\.com/);
+  assert.match(proxy, /startsWith\(["']\/api\/photos\/google\/["']\)/);
+  assert.match(proxy, /\/api\/photos\/google\/[\s\S]*NextResponse\.next\(\)/);
 
   const popupIndex = client.indexOf('window.open(\n      "about:blank"');
   const sessionFetchIndex = client.indexOf(

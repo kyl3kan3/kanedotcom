@@ -42,6 +42,24 @@ type Trip = {
   stats: { label: string; value: string; icon: string }[];
 };
 
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (!contentType.includes("application/json")) {
+    if (response.redirected || response.url.includes("/auth/")) {
+      throw new Error(
+        "Your family session expired. Refresh the page and sign in again.",
+      );
+    }
+
+    throw new Error(
+      "The family server returned an unexpected response. Please try again.",
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
 const trips: Trip[] = [
   {
     id: "yellowstone",
@@ -375,7 +393,7 @@ export default function AdventureBook({
     let cancelled = false;
     void fetch("/api/photos/google/status", { cache: "no-store" })
       .then(async (response) => {
-        const result = (await response.json()) as GoogleSessionResponse;
+        const result = await readJsonResponse<GoogleSessionResponse>(response);
         if (cancelled) return;
 
         if (response.ok && result.configured) {
@@ -538,7 +556,7 @@ export default function AdventureBook({
         const response = await fetch(
           `/api/photos/google/sessions/${encodeURIComponent(sessionId)}`,
         );
-        const result = (await response.json()) as GoogleImportResponse;
+        const result = await readJsonResponse<GoogleImportResponse>(response);
         if (googlePollActiveSessionRef.current !== sessionId) return;
 
         if (response.status === 401 && result.authUrl) {
@@ -610,7 +628,7 @@ export default function AdventureBook({
       const response = await fetch("/api/photos/google/session", {
         method: "POST",
       });
-      const result = (await response.json()) as GoogleSessionResponse;
+      const result = await readJsonResponse<GoogleSessionResponse>(response);
 
       if (response.status === 401 && result.authUrl) {
         pickerWindow?.close();
