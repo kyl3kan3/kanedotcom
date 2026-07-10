@@ -1,0 +1,1 @@
+CREATE INDEX "memories_family_captured_idx" ON "memories" USING btree ("family_id","captured_at");

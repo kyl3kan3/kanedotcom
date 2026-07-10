@@ -256,3 +256,90 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.ok(popupIndex >= 0 && popupIndex < sessionFetchIndex);
   assert.doesNotMatch(readme, /connection shown in the interface is not wired/i);
 });
+
+test("Google metadata is retained and existing imports can be enriched", () => {
+  const schema = read("db", "schema.ts");
+  const configuration = read("lib", "google-photos.ts");
+  const importer = read(
+    "app",
+    "api",
+    "photos",
+    "google",
+    "sessions",
+    "[sessionId]",
+    "route.ts",
+  );
+  const intelligence = read("lib", "memory-intelligence.ts");
+
+  for (const field of [
+    "sourceMediaId",
+    "capturedAt",
+    "captureTimeSource",
+    "width",
+    "height",
+    "durationMs",
+    "metadataStatus",
+  ]) {
+    assert.match(schema, new RegExp(`${field}:`));
+  }
+
+  assert.match(configuration, /mediaFileMetadata/);
+  assert.match(configuration, /cameraMake/);
+  assert.match(configuration, /videoMetadata/);
+  assert.match(importer, /parseGoogleCaptureTime\(item\.createTime\)/);
+  assert.match(importer, /sourceMediaId:\s*item\.googleId/);
+  assert.match(importer, /metadata\?\.width/);
+  assert.match(importer, /metadata\?\.height/);
+  assert.match(importer, /processingStatus\s*!==\s*["']READY["']/);
+  assert.match(importer, /if \(stored\)[\s\S]*update\(memories\)/);
+  assert.match(intelligence, /parseExif/);
+  assert.match(intelligence, /resize\(\{[\s\S]*width:\s*512/);
+  assert.match(intelligence, /parseMp4MovieHeader/);
+  assert.doesNotMatch(intelligence, /parseExif\([^)]*GPS|latitude|longitude/i);
+});
+
+test("AI trip organization is admin-only, private, reviewable, and atomic", () => {
+  const packageJson = JSON.parse(read("package.json"));
+  const schema = read("db", "schema.ts");
+  const organizer = read("app", "api", "memories", "organize", "route.ts");
+  const apply = read(
+    "app",
+    "api",
+    "memories",
+    "organize",
+    "apply",
+    "route.ts",
+  );
+  const client = read("app", "adventure-book.tsx");
+  const page = read("app", "page.tsx");
+  const envExample = read(".env.example");
+
+  assert.match(packageJson.dependencies.ai, /^\^6\./);
+  assert.match(packageJson.dependencies["@ai-sdk/openai"], /^\^3\./);
+  assert.match(schema, /pgTable\(\s*["']trip_drafts["']/);
+  assert.match(schema, /pgTable\(\s*["']trip_draft_memories["']/);
+
+  assert.match(organizer, /requireFamilyAdmin\(\)/);
+  assert.match(organizer, /generateText\(/);
+  assert.match(organizer, /Output\.object\(/);
+  assert.doesNotMatch(organizer, /generateObject\(/);
+  assert.match(organizer, /openai:\s*\{\s*store:\s*false/);
+  assert.match(organizer, /imageDetail:\s*["']low["']/);
+  assert.match(organizer, /eq\(memories\.familyId,\s*context\.member\.familyId\)/);
+  assert.doesNotMatch(organizer, /request\.json|body\.familyId/);
+
+  assert.match(apply, /requireFamilyAdmin\(\)/);
+  assert.match(apply, /db\.batch\(/);
+  assert.match(apply, /jsonb_to_recordset/);
+  assert.match(apply, /eq\(tripDrafts\.familyId,\s*context\.member\.familyId\)/);
+  assert.doesNotMatch(apply, /body\.familyId|familyId:\s*parsed\.data/);
+
+  assert.match(client, /data-testid=["']organize-memories["']/);
+  assert.match(client, /data-testid=["']memory-organizer["']/);
+  assert.match(client, /data-testid=["']create-approved-trips["']/);
+  assert.match(client, /MessageResponse/);
+  assert.match(client, /void generateTripDrafts\(\)/);
+  assert.match(page, /eq\(trips\.source,\s*["']ai["']\)/);
+  assert.match(envExample, /^OPENAI_API_KEY=/m);
+  assert.match(envExample, /^AI_ORGANIZER_MODEL=/m);
+});

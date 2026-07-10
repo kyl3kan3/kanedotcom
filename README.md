@@ -19,6 +19,9 @@ and an add-memories flow.
 - **Media:** device selections are previewed in the browser and recorded as
   metadata. Admin-selected Google Photos are copied into private Vercel Blob
   storage, while Neon stores their family-scoped records and access checks.
+- **AI organizer:** an admin-only OpenAI vision flow reads capture metadata and
+  small 512px working previews, then stores reviewable trip drafts. Trips and
+  captions are not published until the family admin approves them.
 
 The interactive client is in `app/adventure-book.tsx`. The server page in
 `app/page.tsx` loads the signed-in family member's state, while mutations in
@@ -65,6 +68,8 @@ The application reads these variables:
 | `GOOGLE_PHOTOS_CLIENT_ID` | Google OAuth 2.0 Web application client ID. |
 | `GOOGLE_PHOTOS_CLIENT_SECRET` | Server-only secret for that Google OAuth client. |
 | `GOOGLE_PHOTOS_REDIRECT_URI` | Exact OAuth callback URL. Production uses `https://kanedotcom.com/api/photos/google/callback`. |
+| `OPENAI_API_KEY` | Server-only OpenAI project key used by the admin memory organizer. |
+| `AI_ORGANIZER_MODEL` | Optional organizer model override; defaults to `gpt-5.4`. |
 
 The Vercel/Neon integration may also provide `DATABASE_URL_UNPOOLED`, `PG*`,
 `POSTGRES*`, `NEON_PROJECT_ID`, and other managed aliases. They are useful for
@@ -133,7 +138,16 @@ The admin-only flow uses the
 It obtains OAuth consent, creates a picker session, opens Google's secure
 picker, polls using Google's recommended interval and timeout, copies up to 50
 selected items into private Vercel Blob storage, records them in Neon, and
-deletes the Picker session. It never requests broad background library access.
+deletes the Picker session. Capture time, dimensions, camera details, and safe
+photo/video metadata are kept for trip grouping. Google strips location EXIF
+from Picker downloads, so the site does not claim precise locations from those
+files. It never requests broad background library access.
+
+After a successful admin import, the organizer automatically prepares private
+trip drafts. It uses capture-time gaps as the strongest signal and visible scene
+similarity as supporting evidence. OpenAI request storage is disabled; only
+small working previews are sent, and every draft requires admin approval before
+it can assign memories or captions to a trip.
 
 Google Cloud and Vercel still need matching credentials before the button can
 connect:

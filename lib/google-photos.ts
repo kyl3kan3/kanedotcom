@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireFamilyContext } from "@/lib/family";
+import { requireFamilyAdmin } from "@/lib/family";
 
 export const GOOGLE_PHOTOS_SCOPE =
   "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
@@ -39,14 +39,27 @@ export type GooglePickedMediaItem = {
     baseUrl?: string;
     mimeType?: string;
     filename?: string;
+    mediaFileMetadata?: {
+      width?: number;
+      height?: number;
+      cameraMake?: string;
+      cameraModel?: string;
+      photoMetadata?: {
+        focalLength?: number;
+        apertureFNumber?: number;
+        isoEquivalent?: number;
+        exposureTime?: string;
+      };
+      videoMetadata?: {
+        fps?: number;
+        processingStatus?: "UNSPECIFIED" | "PROCESSING" | "READY" | "FAILED";
+      };
+    };
   };
 };
 
 export async function requireGooglePhotosAdmin() {
-  const { member } = await requireFamilyContext();
-  if (member.role !== "owner") {
-    throw new Error("Only the family admin can import from Google Photos.");
-  }
+  const { member } = await requireFamilyAdmin();
   return member;
 }
 

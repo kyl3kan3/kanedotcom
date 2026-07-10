@@ -37,6 +37,12 @@ type ImportCandidate = {
   mimeType: string;
   kind: "image" | "video";
   pathname: string;
+  capturedAt: Date | null;
+  width: number | null;
+  height: number | null;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  sourceMetadata: Record<string, unknown> | null;
 };
 
 type ImportedMemory = {
@@ -47,6 +53,52 @@ type ImportedMemory = {
   source: "google_photos";
   url: string;
 };
+
+function parseGoogleCaptureTime(value: string | undefined) {
+  if (!value) return null;
+  const capturedAt = new Date(value);
+  return Number.isNaN(capturedAt.getTime()) ? null : capturedAt;
+}
+
+function positiveInteger(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value! : null;
+}
+
+function cleanMetadataText(value: string | undefined) {
+  const cleaned = value?.trim().slice(0, 160);
+  return cleaned || null;
+}
+
+function buildGoogleSourceMetadata(
+  file: NonNullable<GooglePickedMediaItem["mediaFile"]>,
+) {
+  const metadata = file.mediaFileMetadata;
+  if (!metadata) return null;
+
+  const photo = metadata.photoMetadata;
+  const video = metadata.videoMetadata;
+  const sourceMetadata: Record<string, unknown> = {};
+
+  if (photo) {
+    sourceMetadata.photo = {
+      focalLength: Number.isFinite(photo.focalLength) ? photo.focalLength : null,
+      apertureFNumber: Number.isFinite(photo.apertureFNumber)
+        ? photo.apertureFNumber
+        : null,
+      isoEquivalent: positiveInteger(photo.isoEquivalent),
+      exposureTime: cleanMetadataText(photo.exposureTime),
+    };
+  }
+
+  if (video) {
+    sourceMetadata.video = {
+      fps: Number.isFinite(video.fps) && (video.fps ?? 0) > 0 ? video.fps : null,
+      processingStatus: video.processingStatus ?? null,
+    };
+  }
+
+  return Object.keys(sourceMetadata).length > 0 ? sourceMetadata : null;
+}
 
 function pollAfterMs(session: GooglePhotosSession) {
   return googleDurationToMilliseconds(
@@ -115,6 +167,13 @@ async function importCandidate(
       kind: memories.kind,
       mimeType: memories.mimeType,
       name: memories.originalName,
+      capturedAt: memories.capturedAt,
+      captureTimeSource: memories.captureTimeSource,
+      width: memories.width,
+      height: memories.height,
+      cameraMake: memories.cameraMake,
+      cameraModel: memories.cameraModel,
+      sourceMetadata: memories.sourceMetadata,
     })
     .from(memories)
     .where(
@@ -131,6 +190,35 @@ async function importCandidate(
     .limit(1);
 
   if (stored) {
+    await db
+      .update(memories)
+      .set({
+        sourceMediaId: item.googleId,
+        capturedAt: item.capturedAt ?? stored.capturedAt,
+        captureTimeSource: item.capturedAt
+          ? "google"
+          : stored.captureTimeSource,
+        width: item.width ?? stored.width,
+        height: item.height ?? stored.height,
+        cameraMake: item.cameraMake ?? stored.cameraMake,
+        cameraModel: item.cameraModel ?? stored.cameraModel,
+        sourceMetadata: item.sourceMetadata ?? stored.sourceMetadata,
+        metadataStatus:
+          item.capturedAt ||
+          stored.capturedAt ||
+          item.width ||
+          stored.width ||
+          item.height ||
+          stored.height
+            ? "ready"
+            : "pending",
+      })
+      .where(
+        and(
+          eq(memories.id, stored.id),
+          eq(memories.familyId, member.familyId),
+        ),
+      );
     return {
       memory: toImportedMemory(stored.id, {
         kind: stored.kind,
@@ -177,7 +265,17 @@ async function importCandidate(
             originalName: storedName,
             mimeType: storedMimeType,
             kind: item.kind,
+            sourceMediaId: item.googleId,
             storageKey: blob.pathname,
+            capturedAt: item.capturedAt,
+            captureTimeSource: item.capturedAt ? "google" : null,
+            width: item.width,
+            height: item.height,
+            cameraMake: item.cameraMake,
+            cameraModel: item.cameraModel,
+            sourceMetadata: item.sourceMetadata,
+            metadataStatus:
+              item.capturedAt || item.width || item.height ? "ready" : "pending",
             status: "ready",
           })
           .where(
@@ -196,7 +294,17 @@ async function importCandidate(
             source: "google_photos",
             originalName: storedName,
             mimeType: storedMimeType,
+            sourceMediaId: item.googleId,
             storageKey: blob.pathname,
+            capturedAt: item.capturedAt,
+            captureTimeSource: item.capturedAt ? "google" : null,
+            width: item.width,
+            height: item.height,
+            cameraMake: item.cameraMake,
+            cameraModel: item.cameraModel,
+            sourceMetadata: item.sourceMetadata,
+            metadataStatus:
+              item.capturedAt || item.width || item.height ? "ready" : "pending",
             status: "ready",
           })
           .returning({ id: memories.id });
@@ -312,6 +420,15 @@ export async function GET(
           : "image";
       if (!file.mimeType.startsWith(`${kind}/`)) return [];
 
+      const metadata = file.mediaFileMetadata;
+      if (
+        kind === "video" &&
+        metadata?.videoMetadata?.processingStatus &&
+        metadata.videoMetadata.processingStatus !== "READY"
+      ) {
+        return [];
+      }
+
       const mimeType = normalizeGoogleMediaMimeType(file.mimeType).slice(0, 120);
       const name = normalizeGoogleMediaFilename(
         (file.filename || `google-photo-${item.id}`).slice(0, 240),
@@ -325,6 +442,12 @@ export async function GET(
           mimeType,
           kind,
           pathname: getGoogleMemoryPathname(member.familyId, item.id, name),
+          capturedAt: parseGoogleCaptureTime(item.createTime),
+          width: positiveInteger(metadata?.width),
+          height: positiveInteger(metadata?.height),
+          cameraMake: cleanMetadataText(metadata?.cameraMake),
+          cameraModel: cleanMetadataText(metadata?.cameraModel),
+          sourceMetadata: buildGoogleSourceMetadata(file),
         },
       ];
     });

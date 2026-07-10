@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import AdventureBook from "./adventure-book";
 import { signOutAction } from "./actions";
@@ -63,6 +63,7 @@ export default async function Home() {
     currentVoteRows,
     memoryCountRows,
     readyMemoryRows,
+    generatedTripRows,
   ] = await Promise.all([
     db
       .select({ slug: trips.slug })
@@ -123,7 +124,71 @@ export default async function Home() {
       )
       .orderBy(desc(memories.createdAt))
       .limit(50),
+    db
+      .select({
+        tripId: trips.id,
+        title: trips.title,
+        summary: trips.summary,
+        startAt: trips.startAt,
+        endAt: trips.endAt,
+        memoryId: memories.id,
+        memoryName: memories.originalName,
+        memoryKind: memories.kind,
+        memoryCaption: memories.caption,
+      })
+      .from(trips)
+      .leftJoin(
+        memories,
+        and(
+          eq(memories.tripId, trips.id),
+          eq(memories.status, "ready"),
+          isNull(memories.deletedAt),
+        ),
+      )
+      .where(
+        and(eq(trips.familyId, member.familyId), eq(trips.source, "ai")),
+      )
+      .orderBy(desc(trips.createdAt), asc(memories.capturedAt)),
   ]);
+
+  const generatedTrips = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      summary: string;
+      startAt: string | null;
+      endAt: string | null;
+      memories: Array<{
+        id: string;
+        name: string;
+        kind: "image" | "video";
+        caption: string;
+        url: string;
+      }>;
+    }
+  >();
+
+  for (const row of generatedTripRows) {
+    const trip = generatedTrips.get(row.tripId) ?? {
+      id: row.tripId,
+      title: row.title,
+      summary: row.summary ?? "A new family chapter.",
+      startAt: row.startAt?.toISOString() ?? null,
+      endAt: row.endAt?.toISOString() ?? null,
+      memories: [],
+    };
+    if (row.memoryId && row.memoryName && row.memoryKind) {
+      trip.memories.push({
+        id: row.memoryId,
+        name: row.memoryName,
+        kind: row.memoryKind,
+        caption: row.memoryCaption ?? "A family memory.",
+        url: `/api/memories/${row.memoryId}`,
+      });
+    }
+    generatedTrips.set(row.tripId, trip);
+  }
 
   return (
     <AdventureBook
@@ -140,6 +205,7 @@ export default async function Home() {
         source: "google_photos" as const,
         url: `/api/memories/${memory.id}`,
       }))}
+      generatedTrips={[...generatedTrips.values()]}
       savedMemoryCount={memoryCountRows[0]?.total ?? 0}
     />
   );

@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { MessageResponse } from "@/components/ai-elements/message";
 import {
   completeTripQuiz,
   saveMemoryMetadata,
@@ -58,6 +59,26 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+function formatTripDateRange(startAt: string | null, endAt: string | null) {
+  if (!startAt) return "Date still being remembered";
+  const start = new Date(startAt);
+  const end = endAt ? new Date(endAt) : start;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "Date still being remembered";
+  }
+  const startLabel = start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const endLabel = end.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
 }
 
 const trips: Trip[] = [
@@ -278,6 +299,49 @@ type GoogleSessionResponse = {
   error?: string;
 };
 
+type GeneratedTrip = {
+  id: string;
+  title: string;
+  summary: string;
+  startAt: string | null;
+  endAt: string | null;
+  memories: Array<{
+    id: string;
+    name: string;
+    kind: "image" | "video";
+    caption: string;
+    url: string;
+  }>;
+};
+
+type TripDraft = {
+  id: string;
+  runId: string;
+  title: string;
+  summary: string;
+  startAt: string | null;
+  endAt: string | null;
+  memories: Array<{
+    id: string;
+    kind: "image" | "video";
+    caption: string;
+    url: string;
+  }>;
+};
+
+type OrganizerResponse = {
+  runId?: string | null;
+  drafts?: TripDraft[];
+  unassignedCount?: number;
+  error?: string;
+};
+
+type OrganizerApplyResponse = {
+  created?: number;
+  tripIds?: string[];
+  error?: string;
+};
+
 type GoogleImportResponse = {
   ready?: boolean;
   pollAfterMs?: number;
@@ -298,6 +362,7 @@ type AdventureBookProps = {
   initialVoteCounts: Record<string, number>;
   initialCurrentVote: string | null;
   initialMemories: ImportedMedia[];
+  generatedTrips: GeneratedTrip[];
   savedMemoryCount: number;
 };
 
@@ -317,6 +382,7 @@ export default function AdventureBook({
   initialVoteCounts,
   initialCurrentVote,
   initialMemories,
+  generatedTrips,
   savedMemoryCount,
 }: AdventureBookProps) {
   const [activeTripIndex, setActiveTripIndex] = useState(0);
@@ -328,6 +394,21 @@ export default function AdventureBook({
     { src: string; alt: string; caption: string } | undefined
   >();
   const [importOpen, setImportOpen] = useState(false);
+  const [organizerOpen, setOrganizerOpen] = useState(false);
+  const [organizerState, setOrganizerState] = useState<
+    "idle" | "loading" | "analyzing" | "review" | "saving" | "done" | "error"
+  >("idle");
+  const [organizerMessage, setOrganizerMessage] = useState(
+    "AI can turn capture dates and visual clues into trip chapter drafts.",
+  );
+  const [tripDrafts, setTripDrafts] = useState<TripDraft[]>([]);
+  const [organizerRunId, setOrganizerRunId] = useState<string | null>(null);
+  const [unassignedMemoryCount, setUnassignedMemoryCount] = useState(
+    initialMemories.length,
+  );
+  const [approvedDraftIds, setApprovedDraftIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [importView, setImportView] = useState<"choose" | "google">("choose");
   const [importedMedia, setImportedMedia] =
     useState<ImportedMedia[]>(initialMemories);
@@ -453,16 +534,17 @@ export default function AdventureBook({
   }, []);
 
   useEffect(() => {
-    if (!lightbox && !importOpen) return;
+    if (!lightbox && !importOpen && !organizerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setLightbox(undefined);
         setImportOpen(false);
+        setOrganizerOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [lightbox, importOpen]);
+  }, [lightbox, importOpen, organizerOpen]);
 
   const selectTrip = (index: number) => {
     setActiveTripIndex(index);
@@ -506,6 +588,114 @@ export default function AdventureBook({
   };
 
   const chooseFiles = () => fileInputRef.current?.click();
+
+  const showOrganizerReview = (result: OrganizerResponse) => {
+    const drafts = result.drafts ?? [];
+    setTripDrafts(drafts);
+    setOrganizerRunId(result.runId ?? null);
+    setUnassignedMemoryCount(result.unassignedCount ?? 0);
+    setApprovedDraftIds(new Set(drafts.map((draft) => draft.id)));
+    if (drafts.length > 0) {
+      setOrganizerState("review");
+      setOrganizerMessage(
+        `${drafts.length} trip draft${drafts.length === 1 ? " is" : "s are"} ready. Review them before adding anything to the book.`,
+      );
+    } else {
+      setOrganizerState("idle");
+      setOrganizerMessage(
+        (result.unassignedCount ?? 0) > 0
+          ? "Ready to read capture dates and visual clues from the unorganized memories."
+          : "Every permanent memory is already in a trip chapter.",
+      );
+    }
+  };
+
+  const openOrganizer = async () => {
+    if (!isAdmin) return;
+    setOrganizerOpen(true);
+    setOrganizerState("loading");
+    setOrganizerMessage("Checking for saved trip drafts...");
+    try {
+      const response = await fetch("/api/memories/organize", {
+        cache: "no-store",
+      });
+      const result = await readJsonResponse<OrganizerResponse>(response);
+      if (!response.ok) throw new Error(result.error ?? "Could not open the organizer.");
+      showOrganizerReview(result);
+    } catch (error) {
+      setOrganizerState("error");
+      setOrganizerMessage(
+        error instanceof Error ? error.message : "Could not open the organizer.",
+      );
+    }
+  };
+
+  const generateTripDrafts = async () => {
+    if (!isAdmin) return;
+    setOrganizerOpen(true);
+    setOrganizerState("analyzing");
+    setOrganizerMessage(
+      "Reading capture dates, comparing scenes, and writing private chapter drafts...",
+    );
+    try {
+      const response = await fetch("/api/memories/organize", { method: "POST" });
+      const result = await readJsonResponse<OrganizerResponse>(response);
+      if (!response.ok) {
+        throw new Error(result.error ?? "The AI organizer could not finish.");
+      }
+      showOrganizerReview(result);
+    } catch (error) {
+      setOrganizerState("error");
+      setOrganizerMessage(
+        error instanceof Error
+          ? error.message
+          : "The AI organizer could not finish. Nothing was published.",
+      );
+    }
+  };
+
+  const toggleDraftApproval = (draftId: string) => {
+    setApprovedDraftIds((current) => {
+      const next = new Set(current);
+      if (next.has(draftId)) next.delete(draftId);
+      else next.add(draftId);
+      return next;
+    });
+  };
+
+  const applyTripDrafts = async () => {
+    if (!organizerRunId || approvedDraftIds.size === 0) return;
+    setOrganizerState("saving");
+    setOrganizerMessage(
+      `Creating ${approvedDraftIds.size} approved trip chapter${approvedDraftIds.size === 1 ? "" : "s"}...`,
+    );
+    try {
+      const response = await fetch("/api/memories/organize/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runId: organizerRunId,
+          approvedDraftIds: [...approvedDraftIds],
+        }),
+      });
+      const result = await readJsonResponse<OrganizerApplyResponse>(response);
+      if (!response.ok) {
+        throw new Error(result.error ?? "The approved trips could not be created.");
+      }
+      setOrganizerState("done");
+      setOrganizerMessage(
+        `${result.created ?? approvedDraftIds.size} new trip chapter${(result.created ?? approvedDraftIds.size) === 1 ? " is" : "s are"} now in the family book.`,
+      );
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (error) {
+      setOrganizerState("error");
+      setOrganizerMessage(
+        error instanceof Error
+          ? error.message
+          : "The approved trips could not be created.",
+      );
+    }
+  };
 
   const stopGooglePhotosPolling = () => {
     if (googlePollTimerRef.current !== null) {
@@ -595,6 +785,10 @@ export default function AdventureBook({
             `${media.length} Google Photos memor${media.length === 1 ? "y is" : "ies are"} permanently in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}`,
           );
           setImportView("choose");
+          if (newlySaved > 0) {
+            setImportOpen(false);
+            void generateTripDrafts();
+          }
         } else {
           setGoogleMessage("Google Photos finished, but no usable photos or videos were selected.");
         }
@@ -846,15 +1040,26 @@ export default function AdventureBook({
                 {importedMedia.length} private memor{importedMedia.length === 1 ? "y" : "ies"} safely unpacked from Google Photos.
               </p>
             </div>
-            <button
-              className="text-button"
-              onClick={() => {
-                setImportView("choose");
-                setImportOpen(true);
-              }}
-            >
-              Open all memories <span aria-hidden="true">→</span>
-            </button>
+            <div className="memory-shelf-actions">
+              {isAdmin && (
+                <button
+                  className="ai-organize-button"
+                  data-testid="organize-memories"
+                  onClick={openOrganizer}
+                >
+                  <span aria-hidden="true">✨</span> Organize with AI
+                </button>
+              )}
+              <button
+                className="text-button"
+                onClick={() => {
+                  setImportView("choose");
+                  setImportOpen(true);
+                }}
+              >
+                Open all memories <span aria-hidden="true">→</span>
+              </button>
+            </div>
           </div>
           <div className="memory-shelf-grid">
             {importedMedia.slice(0, 8).map((media) =>
@@ -870,6 +1075,55 @@ export default function AdventureBook({
                 </figure>
               ),
             )}
+          </div>
+        </section>
+      )}
+
+      {generatedTrips.length > 0 && (
+        <section className="generated-trips-section" id="family-trip-chapters">
+          <div className="generated-trips-heading">
+            <div>
+              <span className="handwritten-label">approved by the family admin</span>
+              <h2>Chapters made from our memories</h2>
+            </div>
+            <p>
+              Capture dates helped sort the moments. AI suggested the words; a
+              family admin chose what became part of the book.
+            </p>
+          </div>
+          <div className="generated-trip-grid">
+            {generatedTrips.map((trip, tripIndex) => (
+              <article className="generated-trip-card" key={trip.id}>
+                <div className="generated-trip-card-topline">
+                  <span>CHAPTER {String(tripIndex + 1).padStart(2, "0")}</span>
+                  <time>{formatTripDateRange(trip.startAt, trip.endAt)}</time>
+                </div>
+                <MessageResponse className="generated-trip-title">
+                  {trip.title}
+                </MessageResponse>
+                <MessageResponse className="generated-trip-summary">
+                  {trip.summary}
+                </MessageResponse>
+                <div className="generated-trip-media">
+                  {trip.memories.slice(0, 6).map((memory) => (
+                    <figure key={memory.id}>
+                      {memory.kind === "image" ? (
+                        <img
+                          src={memory.url}
+                          alt={memory.caption}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <video src={memory.url} controls preload="metadata" />
+                      )}
+                      <figcaption>
+                        <MessageResponse>{memory.caption}</MessageResponse>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </article>
+            ))}
           </div>
         </section>
       )}
@@ -1231,6 +1485,183 @@ export default function AdventureBook({
                 ) : (
                   <button className="primary-button" onClick={chooseFiles}>Use this device instead <span>→</span></button>
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {organizerOpen && (
+        <div
+          className="dialog-backdrop organizer-backdrop"
+          role="presentation"
+          onMouseDown={() => setOrganizerOpen(false)}
+        >
+          <div
+            className="organizer-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="organizer-title"
+            aria-busy={
+              organizerState === "loading" ||
+              organizerState === "analyzing" ||
+              organizerState === "saving"
+            }
+            data-testid="memory-organizer"
+            data-state={organizerState}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="dialog-close"
+              onClick={() => setOrganizerOpen(false)}
+              aria-label="Close AI memory organizer"
+            >
+              ×
+            </button>
+            <span className="handwritten-label">admin memory workshop</span>
+            <div className="organizer-heading">
+              <div>
+                <h2 id="organizer-title">Turn photos into trip chapters</h2>
+                <p
+                  data-testid="organizer-status"
+                  role={organizerState === "error" ? "alert" : "status"}
+                >
+                  {organizerMessage}
+                </p>
+              </div>
+              <span className="organizer-privacy-seal">
+                PRIVATE
+                <small>ADMIN REVIEW</small>
+              </span>
+            </div>
+
+            {(organizerState === "loading" ||
+              organizerState === "analyzing" ||
+              organizerState === "saving") && (
+              <div className="organizer-working">
+                <div className="organizer-spark" aria-hidden="true">✦</div>
+                <ol>
+                  <li className={organizerState === "analyzing" ? "active" : ""}>
+                    <span>1</span>
+                    <div><b>Read safe metadata</b><small>Capture dates, dimensions, and file details</small></div>
+                  </li>
+                  <li className={organizerState === "analyzing" ? "active" : ""}>
+                    <span>2</span>
+                    <div><b>Compare small previews</b><small>512px working images, never public Blob links</small></div>
+                  </li>
+                  <li className={organizerState === "saving" ? "active" : ""}>
+                    <span>3</span>
+                    <div><b>{organizerState === "saving" ? "Create approved chapters" : "Write review drafts"}</b><small>Nothing appears until the admin approves it</small></div>
+                  </li>
+                </ol>
+              </div>
+            )}
+
+            {organizerState === "idle" && (
+              <div className="organizer-empty">
+                <span aria-hidden="true">🗂️</span>
+                <h3>
+                  {unassignedMemoryCount > 0
+                    ? `${unassignedMemoryCount} memories are ready to sort`
+                    : "The shelf is already organized"}
+                </h3>
+                <p>
+                  The AI can suggest dates, titles, groupings, and kid-friendly
+                  captions. It does not publish or identify anyone.
+                </p>
+                <button
+                  className="primary-button"
+                  onClick={generateTripDrafts}
+                  disabled={unassignedMemoryCount === 0}
+                >
+                  Make private trip drafts <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            )}
+
+            {organizerState === "review" && (
+              <>
+                <div className="trip-draft-grid">
+                  {tripDrafts.map((draft) => {
+                    const approved = approvedDraftIds.has(draft.id);
+                    return (
+                      <article
+                        className={`trip-draft-card ${approved ? "approved" : "skipped"}`}
+                        key={draft.id}
+                        data-testid="trip-suggestion"
+                        data-suggestion-id={draft.id}
+                        data-review-state={approved ? "approved" : "skipped"}
+                      >
+                        <div className="trip-draft-collage" aria-hidden="true">
+                          {draft.memories.slice(0, 3).map((memory) =>
+                            memory.kind === "image" ? (
+                              <img key={memory.id} src={memory.url} alt="" loading="lazy" />
+                            ) : (
+                              <span key={memory.id}>▶</span>
+                            ),
+                          )}
+                        </div>
+                        <div className="trip-draft-meta">
+                          <span>{draft.memories.length} memories</span>
+                          <time>{formatTripDateRange(draft.startAt, draft.endAt)}</time>
+                        </div>
+                        <MessageResponse className="trip-draft-title">
+                          {draft.title}
+                        </MessageResponse>
+                        <MessageResponse className="trip-draft-summary">
+                          {draft.summary}
+                        </MessageResponse>
+                        <div className="trip-draft-caption-samples">
+                          {draft.memories.slice(0, 2).map((memory) => (
+                            <MessageResponse key={memory.id}>
+                              {memory.caption}
+                            </MessageResponse>
+                          ))}
+                        </div>
+                        <button
+                          className="draft-review-button"
+                          onClick={() => toggleDraftApproval(draft.id)}
+                          aria-pressed={approved}
+                        >
+                          {approved ? "✓ Approved for the book" : "Skipped — undo"}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+                <div className="organizer-review-actions">
+                  <button className="text-button" onClick={generateTripDrafts}>
+                    Regenerate drafts
+                  </button>
+                  <button
+                    className="primary-button"
+                    data-testid="create-approved-trips"
+                    onClick={applyTripDrafts}
+                    disabled={approvedDraftIds.size === 0}
+                  >
+                    Create {approvedDraftIds.size || "no"} approved trip
+                    {approvedDraftIds.size === 1 ? "" : "s"}
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {organizerState === "error" && (
+              <div className="organizer-error">
+                <span aria-hidden="true">✎</span>
+                <p>All original memories are safe and unchanged.</p>
+                <button className="primary-button" onClick={generateTripDrafts}>
+                  Try the organizer again <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            )}
+
+            {organizerState === "done" && (
+              <div className="organizer-done">
+                <span aria-hidden="true">★</span>
+                <h3>Fresh chapters added!</h3>
+                <p>The book is reopening with the approved trips now.</p>
               </div>
             )}
           </div>

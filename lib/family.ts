@@ -77,3 +77,11 @@ export async function requireFamilyContext() {
     member: NonNullable<typeof context.member>;
   };
 }
+
+export async function requireFamilyAdmin() {
+  const context = await requireFamilyContext();
+  if (context.member.role !== "owner") {
+    throw new Error("Only the family admin can do that.");
+  }
+  return context;
+}
