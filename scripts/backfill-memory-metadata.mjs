@@ -9,11 +9,13 @@ config({ path: ".env.local" });
 const apply = process.argv.includes("--apply");
 const sql = neon(process.env.DATABASE_URL);
 const quickTimeEpochOffsetSeconds = 2_082_844_800;
+const unixEpochSentinelWindowMs = 24 * 60 * 60 * 1000;
 const { parse: parseExif } = exifr;
 
 function plausibleDate(value) {
   const date = value instanceof Date ? value : value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return null;
+  if (Math.abs(date.getTime()) <= unixEpochSentinelWindowMs) return null;
   const year = date.getUTCFullYear();
   return year >= 1970 && year <= new Date().getUTCFullYear() + 1 ? date : null;
 }

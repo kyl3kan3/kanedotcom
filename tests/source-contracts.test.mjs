@@ -296,6 +296,7 @@ test("Google metadata is retained and existing imports can be enriched", () => {
   assert.match(intelligence, /parseExif/);
   assert.match(intelligence, /resize\(\{[\s\S]*width:\s*512/);
   assert.match(intelligence, /parseMp4MovieHeader/);
+  assert.match(intelligence, /UNIX_EPOCH_SENTINEL_WINDOW_MS/);
   assert.doesNotMatch(intelligence, /parseExif\([^)]*GPS|latitude|longitude/i);
 });
 

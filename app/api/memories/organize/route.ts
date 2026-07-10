@@ -79,7 +79,10 @@ function cleanAiText(value: string, maximumLength: number) {
 function dateRangeForMemories(items: PreparedMemory[]) {
   const dates = items
     .map((item) => item.metadata.capturedAt)
-    .filter((date): date is Date => Boolean(date))
+    .filter(
+      (date): date is Date =>
+        Boolean(date) && Math.abs(date!.getTime()) > 24 * 60 * 60 * 1000,
+    )
     .sort((left, right) => left.getTime() - right.getTime());
   return {
     startAt: dates[0] ?? null,

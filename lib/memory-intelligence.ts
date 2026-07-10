@@ -5,6 +5,7 @@ import { getPrivateMemoryUrl } from "@/lib/memory-storage";
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 120 * 1024 * 1024;
 const QUICKTIME_EPOCH_OFFSET_SECONDS = 2_082_844_800;
+const UNIX_EPOCH_SENTINEL_WINDOW_MS = 24 * 60 * 60 * 1000;
 const { parse: parseExif } = exifr;
 
 export type MemoryAnalysisInput = {
@@ -65,6 +66,7 @@ function plausibleCaptureDate(value: unknown) {
         ? new Date(value)
         : null;
   if (!date || Number.isNaN(date.getTime())) return null;
+  if (Math.abs(date.getTime()) <= UNIX_EPOCH_SENTINEL_WINDOW_MS) return null;
 
   const year = date.getUTCFullYear();
   const nextYear = new Date().getUTCFullYear() + 1;
