@@ -69,6 +69,7 @@ test("Neon Auth is exposed through Next.js and protects application routes", () 
   assert.match(authServer, /createNeonAuth/);
   assert.match(authServer, /NEON_AUTH_BASE_URL/);
   assert.match(authServer, /NEON_AUTH_COOKIE_SECRET/);
+  assert.match(authServer, /sameSite:\s*["']lax["']/);
   assert.match(authRoute, /export async function GET/);
   assert.match(authRoute, /export async function POST/);
   assert.match(authRoute, /getAuth\(\)\.handler\(\)/);

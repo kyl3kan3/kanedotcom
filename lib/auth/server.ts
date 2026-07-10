@@ -19,6 +19,10 @@ export function getAuth() {
     cookies: {
       secret: cookieSecret,
       sessionDataTtl: 300,
+      // Google OAuth returns through a top-level cross-site GET. Lax keeps the
+      // signed-in family session available for that callback while continuing
+      // to exclude the cookie from cross-site POST requests.
+      sameSite: "lax",
     },
     logLevel: "warn",
   });
