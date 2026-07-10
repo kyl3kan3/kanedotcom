@@ -11,36 +11,48 @@ import {
 } from "react";
 import Link from "next/link";
 import { MessageResponse } from "@/components/ai-elements/message";
+import { NEXT_ADVENTURE_OPTIONS } from "@/lib/next-adventure";
 import {
   completeTripQuiz,
   saveMemoryMetadata,
   voteNextAdventure,
 } from "./actions";
 
-type Trip = {
+type GeneratedMemory = {
   id: string;
-  place: string;
-  shortPlace: string;
-  year: string;
-  kicker: string;
+  name: string;
+  kind: "image" | "video";
+  caption: string;
+  url: string;
+  capturedAt: string | null;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+};
+
+type GeneratedTrip = {
+  id: string;
   title: string;
-  story: string;
-  quote: string;
-  quoteBy: string;
+  summary: string;
+  startAt: string | null;
+  endAt: string | null;
+  memories: GeneratedMemory[];
+};
+
+type BookTrip = GeneratedTrip & {
   accent: string;
   accentSoft: string;
   icon: string;
-  coordinates: string;
-  photos: { src: string; alt: string; caption: string }[];
-  video: string;
-  videoPoster: string;
-  quiz: {
-    question: string;
-    answers: string[];
-    correct: number;
-    celebration: string;
-  };
-  stats: { label: string; value: string; icon: string }[];
+  photos: GeneratedMemory[];
+  videos: GeneratedMemory[];
+};
+
+type FamilyCrewMember = {
+  id: string;
+  displayName: string;
+  role: "owner" | "adult" | "child";
+  memoryCount: number;
+  stampCount: number;
 };
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -61,6 +73,8 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+const FAMILY_TIME_ZONE = "America/Chicago";
+
 function formatTripDateRange(startAt: string | null, endAt: string | null) {
   if (!startAt) return "Date still being remembered";
   const start = new Date(startAt);
@@ -72,211 +86,75 @@ function formatTripDateRange(startAt: string | null, endAt: string | null) {
     month: "short",
     day: "numeric",
     year: "numeric",
-    timeZone: "America/Chicago",
+    timeZone: FAMILY_TIME_ZONE,
   });
   const endLabel = end.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-    timeZone: "America/Chicago",
+    timeZone: FAMILY_TIME_ZONE,
   });
   return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
 }
 
-const trips: Trip[] = [
-  {
-    id: "yellowstone",
-    place: "Yellowstone, Wyoming",
-    shortPlace: "Yellowstone",
-    year: "SUMMER 2025",
-    kicker: "The Great Geyser Quest",
-    title: "Cloud factories, campfire toast & one very clever squirrel",
-    story:
-      "We followed the boardwalk past bubbling paint pots, counted bison from the car, and stayed up late enough to see more stars than anyone thought could fit in one sky.",
-    quote: "I think geysers are how the clouds get made.",
-    quoteBy: "A tiny tour guide, age 7",
-    accent: "#ef6a5b",
-    accentSoft: "#ffe1d9",
-    icon: "🌋",
-    coordinates: "44.4280° N · 110.5885° W",
-    photos: [
-      {
-        src: "https://images.unsplash.com/photo-1754962987501-2b0be5c0b145?auto=format&fit=crop&w=1400&q=86",
-        alt: "A geyser erupting beneath a bright blue sky in Yellowstone",
-        caption: "Old Faithful, right on time — unlike the rest of us.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=86",
-        alt: "A family campsite glowing in warm evening light",
-        caption: "The night of the heroic three-marshmallow s’more.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=86",
-        alt: "A wide road curving through a dramatic mountain landscape",
-        caption: "The scenic shortcut that added only two hours.",
-      },
-    ],
-    video:
-      "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    videoPoster:
-      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1400&q=86",
-    quiz: {
-      question: "Who figured out how to unzip the snack backpack?",
-      answers: ["A squirrel", "A raven", "Dad"],
-      correct: 0,
-      celebration: "Exactly! That squirrel earned the Snack Bandit badge.",
-    },
-    stats: [
-      { label: "Bison spotted", value: "23", icon: "🦬" },
-      { label: "S’mores built", value: "18", icon: "🔥" },
-      { label: "Wrong turns", value: "2½", icon: "🧭" },
-    ],
-  },
-  {
-    id: "beach",
-    place: "Gulf Shores, Alabama",
-    shortPlace: "Beach Week",
-    year: "SPRING 2024",
-    kicker: "Operation Sandy Toes",
-    title: "Sunrise shells, cannonball contests & the leaning sandcastle",
-    story:
-      "Every morning started with a shell hunt and every afternoon ended with someone still wearing goggles at dinner. The castle lasted eleven glorious minutes.",
-    quote: "The ocean keeps trying to take our fort.",
-    quoteBy: "Chief sand architect, age 9",
-    accent: "#287f8f",
-    accentSoft: "#d9f2f2",
-    icon: "🏖️",
-    coordinates: "30.2460° N · 87.7008° W",
-    photos: [
-      {
-        src: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=86",
-        alt: "Turquoise waves rolling onto a bright sandy beach",
-        caption: "First one in the water wins. No one defined ‘in.’",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1473116763249-2faaef81ccda?auto=format&fit=crop&w=1400&q=86",
-        alt: "A sandcastle on a sunny beach near the water",
-        caption: "Fort Awesome, moments before the tide’s surprise attack.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1400&q=86",
-        alt: "Palm trees beside a calm tropical shoreline",
-        caption: "The walk where we found the almost-perfect shell.",
-      },
-    ],
-    video:
-      "https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_30fps.mp4",
-    videoPoster:
-      "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=1400&q=86",
-    quiz: {
-      question: "What did we name the lopsided sandcastle?",
-      answers: ["Fort Awesome", "Castle Crunch", "Sandy Manor"],
-      correct: 0,
-      celebration: "You remembered! Long live Fort Awesome.",
-    },
-    stats: [
-      { label: "Shells adopted", value: "41", icon: "🐚" },
-      { label: "Cannonballs", value: "16", icon: "💦" },
-      { label: "Sandy snacks", value: "4", icon: "🍉" },
-    ],
-  },
-  {
-    id: "chicago",
-    place: "Chicago, Illinois",
-    shortPlace: "Chicago",
-    year: "WINTER 2024",
-    kicker: "The Snow-Day Expedition",
-    title: "Big buildings, tiny snowflakes & pizza taller than our mittens",
-    story:
-      "We raced the ‘L’ around the Loop, made faces in the Bean, and discovered that a windy city hot chocolate tastes at least twice as good.",
-    quote: "That pizza is wearing another pizza as a hat.",
-    quoteBy: "Deep-dish critic, age 6",
-    accent: "#4e62a7",
-    accentSoft: "#e3e6f8",
-    icon: "🏙️",
-    coordinates: "41.8781° N · 87.6298° W",
-    photos: [
-      {
-        src: "https://images.unsplash.com/photo-1494522358652-f30e61a60313?auto=format&fit=crop&w=1400&q=86",
-        alt: "Chicago skyline beside Lake Michigan",
-        caption: "A skyline so tall it made everyone whisper for a minute.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1515859005217-8a1f08870f59?auto=format&fit=crop&w=1400&q=86",
-        alt: "Chicago city streets lit in the evening",
-        caption: "Following the train rumble to our next snack stop.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1764255908839-bd8bed71364a?auto=format&fit=crop&w=1400&q=86",
-        alt: "A snowy city park in winter",
-        caption: "The five-minute walk that became a snowball tournament.",
-      },
-    ],
-    video:
-      "https://videos.pexels.com/video-files/2887463/2887463-hd_1920_1080_25fps.mp4",
-    videoPoster:
-      "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1400&q=86",
-    quiz: {
-      question: "What warmed everybody up after the windy walk?",
-      answers: ["Hot chocolate", "Lemonade", "Ice cream"],
-      correct: 0,
-      celebration: "Correct — extra marshmallows and all.",
-    },
-    stats: [
-      { label: "Train rides", value: "7", icon: "🚇" },
-      { label: "Snowballs", value: "∞", icon: "❄️" },
-      { label: "Pizza layers", value: "5", icon: "🍕" },
-    ],
-  },
-  {
-    id: "farm",
-    place: "Grandma’s Farm",
-    shortPlace: "The Farm",
-    year: "FALL 2023",
-    kicker: "The Mud-Boot Weekend",
-    title: "Tractor rides, secret recipes & a chicken named Pickles",
-    story:
-      "We woke up with the rooster, picked apples for the pie, and learned that the fastest way to make a new friend is carrying a pocket full of chicken feed.",
-    quote: "Pickles is the boss chicken. You can tell by the walk.",
-    quoteBy: "Junior farmhand, age 8",
-    accent: "#56895d",
-    accentSoft: "#dfefdc",
-    icon: "🚜",
-    coordinates: "Somewhere past the red barn",
-    photos: [
-      {
-        src: "https://images.unsplash.com/photo-1500076656116-558758c991c1?auto=format&fit=crop&w=1400&q=86",
-        alt: "A red barn and green fields under a wide sky",
-        caption: "Home base for the weekend’s very serious expeditions.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1498579397066-22750a3cb424?auto=format&fit=crop&w=1400&q=86",
-        alt: "Fresh apples hanging from a tree in an orchard",
-        caption: "Pie ingredients, minus the three that disappeared.",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&w=1400&q=86",
-        alt: "A curious chicken standing in a farmyard",
-        caption: "Pickles, head of security and crumb inspection.",
-      },
-    ],
-    video:
-      "https://videos.pexels.com/video-files/856980/856980-hd_1920_1080_25fps.mp4",
-    videoPoster:
-      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=86",
-    quiz: {
-      question: "What was the boss chicken’s name?",
-      answers: ["Pickles", "Pancake", "Pepper"],
-      correct: 0,
-      celebration: "That’s right! Pickles approves.",
-    },
-    stats: [
-      { label: "Apples picked", value: "29", icon: "🍎" },
-      { label: "Tractor laps", value: "6", icon: "🚜" },
-      { label: "Muddy boots", value: "8", icon: "🥾" },
-    ],
-  },
-];
+function tripYear(startAt: string | null) {
+  if (!startAt) return "DATE OPEN";
+  const date = new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "DATE OPEN";
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    timeZone: FAMILY_TIME_ZONE,
+  }).format(date);
+}
+
+function shortenTitle(title: string, maximum = 28) {
+  const clean = title.trim();
+  return clean.length <= maximum
+    ? clean
+    : `${clean.slice(0, maximum - 1).trimEnd()}…`;
+}
+
+function formatDuration(durationMs: number | null) {
+  if (!durationMs || durationMs < 1_000) return "short clip";
+  const totalSeconds = Math.round(durationMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function memoryCountAnswers(total: number, chapterIndex: number) {
+  const candidates = [
+    total,
+    Math.max(1, total - (total > 3 ? 2 : 1)),
+    total + (total > 8 ? 3 : 2),
+  ];
+  const answers = Array.from(new Set(candidates));
+  for (let next = total + 1; answers.length < 3; next += 1) {
+    if (!answers.includes(next)) answers.push(next);
+  }
+  const offset = chapterIndex % answers.length;
+  return [...answers.slice(offset), ...answers.slice(0, offset)];
+}
+
+function crewPresentation(member: FamilyCrewMember, index: number) {
+  const colors = ["coral", "blue", "green"] as const;
+  const roleDetails = {
+    owner: { title: "Adventure Book Keeper", icon: "✦" },
+    adult: { title: "Family Memory Maker", icon: "📷" },
+    child: { title: "Junior Explorer", icon: "🧭" },
+  } as const;
+  return {
+    color: colors[index % colors.length],
+    ...roleDetails[member.role],
+  };
+}
+
+const tripThemes = [
+  { accent: "#ef6a5b", accentSoft: "#ffe1d9", icon: "✦" },
+  { accent: "#ffd166", accentSoft: "#fff0bd", icon: "☀" },
+  { accent: "#4faf83", accentSoft: "#dceee2", icon: "★" },
+  { accent: "#3a86ff", accentSoft: "#dceafb", icon: "➤" },
+] as const;
 
 type ImportedMedia = {
   id: string;
@@ -299,21 +177,6 @@ type GoogleSessionResponse = {
   issues?: string[];
   redirectUri?: string;
   error?: string;
-};
-
-type GeneratedTrip = {
-  id: string;
-  title: string;
-  summary: string;
-  startAt: string | null;
-  endAt: string | null;
-  memories: Array<{
-    id: string;
-    name: string;
-    kind: "image" | "video";
-    caption: string;
-    url: string;
-  }>;
 };
 
 type TripDraft = {
@@ -365,16 +228,11 @@ type AdventureBookProps = {
   initialCurrentVote: string | null;
   initialMemories: ImportedMedia[];
   generatedTrips: GeneratedTrip[];
+  familyCrew: FamilyCrewMember[];
   savedMemoryCount: number;
 };
 
-const voteOptions = [
-  { slug: "lake-michigan", place: "Lake Michigan", emoji: "⛵" },
-  { slug: "smoky-mountains", place: "Smoky Mountains", emoji: "⛰️" },
-  { slug: "backyard-campout", place: "Backyard campout", emoji: "⛺" },
-] as const;
-
-const baseVotes = [4, 7, 3];
+const voteOptions = NEXT_ADVENTURE_OPTIONS;
 
 export default function AdventureBook({
   memberName,
@@ -385,9 +243,12 @@ export default function AdventureBook({
   initialCurrentVote,
   initialMemories,
   generatedTrips,
+  familyCrew,
   savedMemoryCount,
 }: AdventureBookProps) {
-  const [activeTripIndex, setActiveTripIndex] = useState(0);
+  const [activeTripId, setActiveTripId] = useState<string | null>(
+    generatedTrips[0]?.id ?? null,
+  );
   const [photoIndex, setPhotoIndex] = useState(0);
   const [bookOpen, setBookOpen] = useState(false);
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
@@ -434,21 +295,63 @@ export default function AdventureBook({
     timeoutAfterMs: number;
   } | null>(null);
   const [votes, setVotes] = useState(() =>
-    baseVotes.map(
-      (base, index) => base + (initialVoteCounts[voteOptions[index].slug] ?? 0),
-    ),
+    voteOptions.map((option) => initialVoteCounts[option.slug] ?? 0),
   );
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
   const [syncMessage, setSyncMessage] = useState("Neon synced");
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
   const googlePollTimerRef = useRef<number | null>(null);
   const googlePollExpiryTimerRef = useRef<number | null>(null);
   const googlePollActiveSessionRef = useRef<string | null>(null);
-  const activeTrip = trips[activeTripIndex];
-  const quizCorrect = quizAnswer === activeTrip.quiz.correct;
+  const bookTrips: BookTrip[] = generatedTrips.map((trip, index) => {
+    const theme = tripThemes[index % tripThemes.length];
+    return {
+      ...trip,
+      ...theme,
+      photos: trip.memories.filter((memory) => memory.kind === "image"),
+      videos: trip.memories.filter((memory) => memory.kind === "video"),
+    };
+  });
+  const activeTrip =
+    bookTrips.find((trip) => trip.id === activeTripId) ?? bookTrips[0] ?? null;
+  const activeTripIndex = activeTrip
+    ? Math.max(0, bookTrips.findIndex((trip) => trip.id === activeTrip.id))
+    : 0;
+  const quizAnswers = activeTrip
+    ? memoryCountAnswers(activeTrip.memories.length, activeTripIndex)
+    : [];
+  const quizCorrect = Boolean(
+    activeTrip && quizAnswer === activeTrip.memories.length,
+  );
+  const statisticMemories =
+    importedMedia.length > 0 ? importedMedia : initialMemories;
+  const photoCount = statisticMemories.filter(
+    (memory) => memory.kind === "image",
+  ).length;
+  const videoCount = statisticMemories.length - photoCount;
+  const chapterHeroPhotos = bookTrips.flatMap((trip) =>
+    trip.photos.map((photo) => ({ ...photo, chapterTitle: trip.title })),
+  );
+  const chapterHeroPhotoIds = new Set(
+    chapterHeroPhotos.map((photo) => photo.id),
+  );
+  const heroPhotos = [
+    ...chapterHeroPhotos,
+    ...statisticMemories
+      .filter(
+        (memory) =>
+          memory.kind === "image" && !chapterHeroPhotoIds.has(memory.id),
+      )
+      .map((memory) => ({
+        ...memory,
+        caption: memory.name,
+        chapterTitle: "Ready for a chapter",
+      })),
+  ];
 
   useEffect(() => {
     return () => {
@@ -548,36 +451,48 @@ export default function AdventureBook({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [lightbox, importOpen, organizerOpen]);
 
-  const selectTrip = (index: number) => {
-    setActiveTripIndex(index);
+  const selectTrip = (tripId: string) => {
+    setActiveTripId(tripId);
     setPhotoIndex(0);
     setQuizAnswer(null);
     requestAnimationFrame(() => {
-      document
-        .getElementById("featured-trip")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      document.getElementById("featured-trip")?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+      featuredHeadingRef.current?.focus({ preventScroll: true });
     });
   };
 
   const openBook = () => {
     setBookOpen(true);
     window.setTimeout(() => {
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
       document
-        .getElementById("adventure-map")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        .getElementById(bookTrips.length > 0 ? "adventure-map" : "memory-shelf")
+        ?.scrollIntoView({
+          behavior: reducedMotion ? "auto" : "smooth",
+          block: "start",
+        });
     }, 480);
   };
 
-  const answerQuiz = async (index: number) => {
-    setQuizAnswer(index);
-    if (index === activeTrip.quiz.correct) {
+  const answerQuiz = async (answer: number) => {
+    if (!activeTrip) return;
+    setQuizAnswer(answer);
+    if (answer === activeTrip.memories.length) {
       const next = Array.from(new Set([...stampedTrips, activeTrip.id]));
       setStampedTrips(next);
     }
 
     setSyncMessage("Saving memory stamp…");
     try {
-      const result = await completeTripQuiz(activeTrip.id, index);
+      const result = await completeTripQuiz(activeTrip.id, answer);
       if (result.correct) {
         setStampedTrips((current) =>
           Array.from(new Set([...current, activeTrip.id])),
@@ -912,7 +827,7 @@ export default function AdventureBook({
         current.map((vote, voteIndex) => {
           const optionSlug = voteOptions[voteIndex].slug;
           if (optionSlug === slug) return vote + 1;
-          if (optionSlug === previousVote) return Math.max(baseVotes[voteIndex], vote - 1);
+          if (optionSlug === previousVote) return Math.max(0, vote - 1);
           return vote;
         }),
       );
@@ -923,9 +838,8 @@ export default function AdventureBook({
       const result = await voteNextAdventure(slug);
       setCurrentVote(result.selected);
       setVotes(
-        baseVotes.map(
-          (base, voteIndex) =>
-            base + (result.counts[voteOptions[voteIndex].slug] ?? 0),
+        voteOptions.map(
+          (option) => result.counts[option.slug] ?? 0,
         ),
       );
       setSyncMessage("Your vote is saved in Neon");
@@ -970,11 +884,14 @@ export default function AdventureBook({
 
       <section className={`hero ${bookOpen ? "book-is-open" : ""}`} id="top">
         <div className="hero-copy">
-          <div className="eyebrow"><span>EST. FOREVER</span><i />148 LITTLE MOMENTS</div>
+          <div className="eyebrow">
+            <span>EST. FOREVER</span><i />
+            {savedMetadataCount} REAL MEMORIES
+          </div>
           <h1>Our great big<br /><em>adventure book</em></h1>
           <p>
             Places we went. Things we tried. Stories we never want to forget.
-            Open the suitcase and come wander with us.
+            Open the suitcase and follow the real chapters we have made together.
           </p>
           <div className="hero-actions">
             <button
@@ -997,8 +914,12 @@ export default function AdventureBook({
         <div className="suitcase-scene" aria-label="A scrapbook collage of family adventures">
           <div className="sun-doodle" aria-hidden="true">☀</div>
           <div className="suitcase-lid">
-            <span className="sticker sticker-one">YELLOWSTONE<br /><b>2025</b></span>
-            <span className="sticker sticker-two">LET’S<br />WANDER</span>
+            <span className="sticker sticker-one">
+              {bookTrips[0] ? shortenTitle(bookTrips[0].title, 18).toUpperCase() : "FIRST CHAPTER"}
+              <br />
+              <b>{bookTrips[0] ? tripYear(bookTrips[0].startAt) : "READY"}</b>
+            </span>
+            <span className="sticker sticker-two">REAL<br />MEMORIES</span>
             <span className="sticker sticker-three">★</span>
           </div>
           <div className="suitcase-base">
@@ -1008,18 +929,15 @@ export default function AdventureBook({
             <span className="suitcase-label">FAMILY<br />CARRY-ON</span>
           </div>
           <div className="photo-fan" aria-hidden={!bookOpen}>
-            <figure className="fan-photo fan-one">
-              <img src={trips[1].photos[0].src} alt="Waves rolling toward a sunny beach" />
-              <figcaption>BEACH WEEK ’24</figcaption>
-            </figure>
-            <figure className="fan-photo fan-two">
-              <img src={trips[0].photos[0].src} alt="A Yellowstone geyser under a blue sky" />
-              <figcaption>GEYSER DAY!</figcaption>
-            </figure>
-            <figure className="fan-photo fan-three">
-              <img src={trips[3].photos[2].src} alt="A curious chicken in a farmyard" />
-              <figcaption>MEET PICKLES</figcaption>
-            </figure>
+            {heroPhotos.slice(0, 3).map((photo, index) => (
+              <figure
+                className={`fan-photo ${["fan-one", "fan-two", "fan-three"][index]}`}
+                key={photo.id}
+              >
+                <img src={photo.url} alt={photo.caption} />
+                <figcaption>{shortenTitle(photo.chapterTitle, 19).toUpperCase()}</figcaption>
+              </figure>
+            ))}
           </div>
           <div className="paper-plane" aria-hidden="true">➤</div>
         </div>
@@ -1027,8 +945,8 @@ export default function AdventureBook({
 
       <div className="ticker" aria-hidden="true">
         <div>
-          <span>★</span> 12 ADVENTURES <span>★</span> 4 STATES <span>★</span> 1,842 “ARE WE THERE YETS?” <span>★</span> ENDLESS SNACKS
-          <span>★</span> 12 ADVENTURES <span>★</span> 4 STATES <span>★</span> 1,842 “ARE WE THERE YETS?” <span>★</span> ENDLESS SNACKS
+          <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS
+          <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS
         </div>
       </div>
 
@@ -1039,7 +957,7 @@ export default function AdventureBook({
               <span className="handwritten-label">fresh from the camera roll</span>
               <h2>Our family memory shelf</h2>
               <p>
-                {importedMedia.length} private memor{importedMedia.length === 1 ? "y" : "ies"} safely unpacked from Google Photos.
+                {importedMedia.length} private memor{importedMedia.length === 1 ? "y" : "ies"} safely tucked into the family book.
               </p>
             </div>
             <div className="memory-shelf-actions">
@@ -1086,11 +1004,11 @@ export default function AdventureBook({
           <div className="generated-trips-heading">
             <div>
               <span className="handwritten-label">approved by the family admin</span>
-              <h2>Chapters made from our memories</h2>
+                <h2>Our real family chapter shelf</h2>
             </div>
             <p>
-              Capture dates helped sort the moments. AI suggested the words; a
-              family admin chose what became part of the book.
+              Capture dates helped sort the moments. Every chapter here was
+              reviewed by a family admin before it joined the book.
             </p>
           </div>
           <div className="generated-trip-grid">
@@ -1124,6 +1042,13 @@ export default function AdventureBook({
                     </figure>
                   ))}
                 </div>
+                <button
+                  className="open-chapter-button"
+                  onClick={() => selectTrip(trip.id)}
+                  aria-controls="featured-trip"
+                >
+                  Open this chapter <span aria-hidden="true">→</span>
+                </button>
               </article>
             ))}
           </div>
@@ -1133,204 +1058,345 @@ export default function AdventureBook({
       <section className="map-section" id="adventure-map">
         <div className="section-heading map-heading">
           <div>
-            <span className="handwritten-label">choose a pin</span>
-            <h2>Where should we<br />go first?</h2>
+            <span className="handwritten-label">follow the dotted line</span>
+            <h2>Our real<br />memory trail</h2>
           </div>
           <p>
-            Every pin opens a chapter. The best ones include a wrong turn,
-            something delicious, and at least one story that gets funnier each year.
+            Every stop opens a chapter made from your family’s own photos. The
+            trail follows when the memories happened—not pretend GPS coordinates.
           </p>
         </div>
 
         <div className="adventure-map">
-          <div className="route route-one" />
-          <div className="route route-two" />
-          <div className="route route-three" />
-          <span className="map-word word-west" aria-hidden="true">WEST</span>
-          <span className="map-word word-home" aria-hidden="true">HOME</span>
-          {trips.map((trip, index) => (
-            <button
-              key={trip.id}
-              className={`map-pin pin-${index + 1} ${activeTripIndex === index ? "active" : ""}`}
-              style={{ "--pin-color": trip.accent } as CSSProperties}
-              onClick={() => selectTrip(index)}
-              aria-label={`Open ${trip.shortPlace} trip from ${trip.year}`}
-              aria-pressed={activeTripIndex === index}
-            >
-              <span className="pin-icon" aria-hidden="true">{trip.icon}</span>
-              <span className="pin-copy">
-                <small>{trip.year}</small>
-                <b>{trip.shortPlace}</b>
-              </span>
-            </button>
-          ))}
-          <div className="compass" aria-hidden="true"><b>N</b><span>✦</span><small>S</small></div>
-        </div>
-      </section>
-
-      <section
-        className="featured-trip"
-        id="featured-trip"
-        style={{
-          "--trip-accent": activeTrip.accent,
-          "--trip-soft": activeTrip.accentSoft,
-        } as CSSProperties}
-      >
-        <div className="trip-number" aria-hidden="true">0{activeTripIndex + 1}</div>
-        <div className="trip-intro">
-          <div className="passport-stamp">
-            <span>{activeTrip.icon}</span>
-            <b>{activeTrip.shortPlace}</b>
-            <small>{activeTrip.year}</small>
-          </div>
-          <div>
-            <div className="chapter-kicker">CHAPTER {activeTripIndex + 1} · {activeTrip.kicker}</div>
-            <h2>{activeTrip.title}</h2>
-            <p>{activeTrip.story}</p>
-            <div className="coordinates">⌖ {activeTrip.coordinates}</div>
-          </div>
-        </div>
-
-        <div className="chapter-grid">
-          <div className="photo-stack-wrap">
-            <div className="photo-stack" aria-live="polite">
-              {activeTrip.photos.map((photo, index) => {
-                const relative = (index - photoIndex + activeTrip.photos.length) % activeTrip.photos.length;
+          <span className="map-word word-west" aria-hidden="true">THEN</span>
+          <span className="map-word word-home" aria-hidden="true">NOW</span>
+          {bookTrips.length > 0 ? (
+            <ol className="memory-trail" aria-label="Published family chapters">
+              {bookTrips.map((trip, index) => {
+                const cover = trip.photos[0];
+                const active = activeTrip?.id === trip.id;
                 return (
-                  <button
-                    key={photo.src}
-                    className={`stack-photo stack-position-${relative}`}
-                    onClick={() => relative === 0 ? setLightbox(photo) : setPhotoIndex(index)}
-                    aria-label={relative === 0 ? `View full size: ${photo.caption}` : `Show photo ${index + 1}: ${photo.caption}`}
-                    tabIndex={relative > 1 ? -1 : 0}
-                  >
-                    <img src={photo.src} alt={relative === 0 ? photo.alt : ""} />
-                    <span>{photo.caption}</span>
-                  </button>
+                  <li className={index % 2 === 0 ? "trail-high" : "trail-low"} key={trip.id}>
+                    <button
+                      className={`memory-stop ${active ? "active" : ""}`}
+                      style={{ "--pin-color": trip.accent } as CSSProperties}
+                      onClick={() => selectTrip(trip.id)}
+                      aria-label={`Open ${trip.title}, ${trip.memories.length} memories from ${formatTripDateRange(trip.startAt, trip.endAt)}`}
+                      aria-current={active ? "step" : undefined}
+                      aria-controls="featured-trip"
+                    >
+                      <span className="memory-stop-number">STOP {String(index + 1).padStart(2, "0")}</span>
+                      {cover ? (
+                        <img className="memory-stop-cover" src={cover.url} alt="" />
+                      ) : (
+                        <span className="memory-stop-cover memory-stop-placeholder" aria-hidden="true">{trip.icon}</span>
+                      )}
+                      <span className="memory-stop-copy">
+                        <small>{formatTripDateRange(trip.startAt, trip.endAt)} · {trip.memories.length} memories</small>
+                        <b>{trip.title}</b>
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
+            </ol>
+          ) : (
+            <div className="map-empty-state">
+              <span aria-hidden="true">✦</span>
+              <h3>The first stop is waiting for your family.</h3>
+              <p>Add a few photos, then the admin can turn them into a real chapter.</p>
+              {isAdmin && (
+                <button className="primary-button" onClick={() => setImportOpen(true)}>
+                  Add the first memories <span aria-hidden="true">→</span>
+                </button>
+              )}
             </div>
-            <div className="photo-controls">
-              <button
-                onClick={() => setPhotoIndex((photoIndex - 1 + activeTrip.photos.length) % activeTrip.photos.length)}
-                aria-label="Previous trip photo"
-              >←</button>
-              <span>PHOTO {photoIndex + 1} / {activeTrip.photos.length}</span>
-              <button
-                onClick={() => setPhotoIndex((photoIndex + 1) % activeTrip.photos.length)}
-                aria-label="Next trip photo"
-              >→</button>
+          )}
+        </div>
+      </section>
+
+      {activeTrip && (
+        <section
+          className="featured-trip"
+          id="featured-trip"
+          style={{
+            "--trip-accent": activeTrip.accent,
+            "--trip-soft": activeTrip.accentSoft,
+          } as CSSProperties}
+        >
+          <div className="trip-number" aria-hidden="true">
+            {String(activeTripIndex + 1).padStart(2, "0")}
+          </div>
+          <div className="trip-intro">
+            <div className="passport-stamp">
+              <span aria-hidden="true">{activeTrip.icon}</span>
+              <b>{shortenTitle(activeTrip.title, 22)}</b>
+              <small>{tripYear(activeTrip.startAt)}</small>
+            </div>
+            <div>
+              <div className="chapter-kicker">
+                REAL CHAPTER {activeTripIndex + 1} · {formatTripDateRange(activeTrip.startAt, activeTrip.endAt)}
+              </div>
+              <h2 ref={featuredHeadingRef} tabIndex={-1}>{activeTrip.title}</h2>
+              <MessageResponse className="trip-intro-story">
+                {activeTrip.summary}
+              </MessageResponse>
+              <div className="chapter-facts">
+                ✦ {activeTrip.memories.length} real memor{activeTrip.memories.length === 1 ? "y" : "ies"} · reviewed by the family admin
+              </div>
             </div>
           </div>
 
-          <div className="chapter-side">
-            <blockquote>
-              <span aria-hidden="true">“</span>
-              {activeTrip.quote}
-              <footer>— {activeTrip.quoteBy}</footer>
-            </blockquote>
-            <div className="trip-stats">
-              {activeTrip.stats.map((stat) => (
-                <div key={stat.label}>
-                  <span aria-hidden="true">{stat.icon}</span>
-                  <b>{stat.value}</b>
-                  <small>{stat.label}</small>
+          <div className="chapter-grid">
+            <div className="photo-stack-wrap">
+              {activeTrip.photos.length > 0 ? (
+                <>
+                  <div className="photo-stack">
+                    {activeTrip.photos.map((photo, index) => {
+                      const relative =
+                        (index - photoIndex + activeTrip.photos.length) %
+                        activeTrip.photos.length;
+                      const positionClass =
+                        relative <= 2
+                          ? `stack-position-${relative}`
+                          : "stack-position-hidden";
+                      return (
+                        <button
+                          key={photo.id}
+                          className={`stack-photo ${positionClass}`}
+                          onClick={() =>
+                            relative === 0
+                              ? setLightbox({
+                                  src: photo.url,
+                                  alt: photo.caption,
+                                  caption: photo.caption,
+                                })
+                              : setPhotoIndex(index)
+                          }
+                          aria-label={
+                            relative === 0
+                              ? `View full size: ${photo.caption}`
+                              : `Show photo ${index + 1}: ${photo.caption}`
+                          }
+                          aria-hidden={relative !== 0}
+                          tabIndex={relative === 0 ? 0 : -1}
+                        >
+                          <img
+                            src={photo.url}
+                            alt={relative === 0 ? photo.caption : ""}
+                          />
+                          <span>{photo.caption}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeTrip.photos.length > 1 && (
+                    <div className="photo-controls">
+                      <button
+                        onClick={() =>
+                          setPhotoIndex(
+                            (photoIndex - 1 + activeTrip.photos.length) %
+                              activeTrip.photos.length,
+                          )
+                        }
+                        aria-label="Previous trip photo"
+                      >
+                        ←
+                      </button>
+                      <span>
+                        PHOTO {photoIndex + 1} / {activeTrip.photos.length}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setPhotoIndex(
+                            (photoIndex + 1) % activeTrip.photos.length,
+                          )
+                        }
+                        aria-label="Next trip photo"
+                      >
+                        →
+                      </button>
+                    </div>
+                  )}
+                  <p className="photo-live-status" role="status">
+                    Showing photo {photoIndex + 1} of {activeTrip.photos.length}:{" "}
+                    {activeTrip.photos[photoIndex]?.caption}
+                  </p>
+                </>
+              ) : (
+                <div className="chapter-media-empty">
+                  <span aria-hidden="true">✦</span>
+                  <p>This chapter has its story, but no still photos yet.</p>
                 </div>
+              )}
+            </div>
+
+            <div className="chapter-side">
+              <div className="chapter-note-card">
+                <span className="chapter-note-label">favorite details</span>
+                <ul>
+                  {activeTrip.memories.slice(0, 3).map((memory) => (
+                    <li key={memory.id}>{memory.caption}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="trip-stats" aria-label="Chapter media counts">
+                <div>
+                  <span aria-hidden="true">✦</span>
+                  <b>{activeTrip.memories.length}</b>
+                  <small>MEMORIES</small>
+                </div>
+                <div>
+                  <span aria-hidden="true">▣</span>
+                  <b>{activeTrip.photos.length}</b>
+                  <small>PHOTOS</small>
+                </div>
+                <div>
+                  <span aria-hidden="true">▶</span>
+                  <b>{activeTrip.videos.length}</b>
+                  <small>VIDEOS</small>
+                </div>
+              </div>
+              {activeTrip.videos[0] && (
+                <div className="video-postcard">
+                  <div className="video-label"><span>▶</span> REAL MOVING MEMORY</div>
+                  <video
+                    key={activeTrip.videos[0].id}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={activeTrip.photos[0]?.url}
+                    aria-label={`${activeTrip.title} video memory`}
+                    src={activeTrip.videos[0].url}
+                  >
+                    Your browser does not support this family video.
+                  </video>
+                  <p>
+                    {activeTrip.videos[0].caption}
+                    <span>{formatDuration(activeTrip.videos[0].durationMs)}</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+      {activeTrip && activeTrip.memories.length > 0 && (
+        <section className="challenge-section" id="challenge">
+          <div className="challenge-copy">
+            <span className="handwritten-label">passport check!</span>
+            <h2>Think you<br />remember?</h2>
+            <p>
+              Earn a real stamp for every chapter you count correctly. Progress
+              is saved for your family profile.
+            </p>
+            <ol
+              className="passport-progress"
+              aria-label={`${stampedTrips.length} of ${bookTrips.length} memory stamps earned`}
+            >
+              {bookTrips.map((trip) => {
+                const earned = stampedTrips.includes(trip.id);
+                return (
+                  <li
+                    key={trip.id}
+                    className={earned ? "earned" : ""}
+                    aria-label={`${trip.title}: stamp ${earned ? "earned" : "not earned"}`}
+                  >
+                    <span aria-hidden="true">{earned ? trip.icon : "?"}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className={`quiz-card ${quizCorrect ? "correct" : ""}`}>
+            <div className="quiz-topline">
+              <span>MEMORY NO. {activeTripIndex + 1}</span>
+              <b>{activeTrip.icon} {shortenTitle(activeTrip.title, 28)}</b>
+            </div>
+            <h3>How many real memories are tucked into this chapter?</h3>
+            <div className="quiz-answers" aria-describedby="quiz-result">
+              {quizAnswers.map((answer, index) => (
+                <button
+                  key={answer}
+                  onClick={() => answerQuiz(answer)}
+                  className={
+                    quizAnswer === answer ? (quizCorrect ? "right" : "wrong") : ""
+                  }
+                  disabled={quizCorrect}
+                >
+                  <span>{String.fromCharCode(65 + index)}</span>
+                  {answer} memor{answer === 1 ? "y" : "ies"}
+                </button>
               ))}
             </div>
-            <div className="video-postcard">
-              <div className="video-label"><span>▶</span> MOVING MEMORIES</div>
-              <video
-                key={activeTrip.id}
-                controls
-                playsInline
-                preload="metadata"
-                poster={activeTrip.videoPoster}
-                aria-label={`${activeTrip.shortPlace} trip video postcard`}
-              >
-                <source src={activeTrip.video} type="video/mp4" />
-                Your browser does not support this trip video.
-              </video>
-              <p>A little postcard from the road <span>00:24</span></p>
+            <div className="quiz-result" id="quiz-result" role="status">
+              {quizAnswer === null
+                ? "Count the photos and clips in this chapter."
+                : quizCorrect
+                  ? "✓ You counted every little moment. Stamp earned!"
+                  : "Good guess—try one more count!"}
             </div>
+            <small className="database-note">{syncMessage}</small>
+            {quizCorrect && (
+              <div className="earned-stamp" aria-hidden="true">
+                MEMORY<br /><b>VERIFIED</b>
+              </div>
+            )}
           </div>
-        </div>
-      </section>
-
-      <section className="challenge-section" id="challenge">
-        <div className="challenge-copy">
-          <span className="handwritten-label">passport check!</span>
-          <h2>Think you<br />remember?</h2>
-          <p>Earn a stamp for every chapter you remember. No pressure — family legends are allowed to get a little fuzzy.</p>
-          <div className="passport-progress" aria-label={`${stampedTrips.length} of ${trips.length} memory stamps earned`}>
-            {trips.map((trip) => (
-              <span key={trip.id} className={stampedTrips.includes(trip.id) ? "earned" : ""} title={trip.shortPlace}>
-                {stampedTrips.includes(trip.id) ? trip.icon : "?"}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className={`quiz-card ${quizCorrect ? "correct" : ""}`}>
-          <div className="quiz-topline">
-            <span>MEMORY NO. {activeTripIndex + 1}</span>
-            <b>{activeTrip.icon} {activeTrip.shortPlace}</b>
-          </div>
-          <h3>{activeTrip.quiz.question}</h3>
-          <div className="quiz-answers">
-            {activeTrip.quiz.answers.map((answer, index) => (
-              <button
-                key={answer}
-                onClick={() => answerQuiz(index)}
-                className={quizAnswer === index ? (quizCorrect ? "right" : "wrong") : ""}
-                aria-pressed={quizAnswer === index}
-              >
-                <span>{String.fromCharCode(65 + index)}</span>{answer}
-              </button>
-            ))}
-          </div>
-          <div className="quiz-result" aria-live="polite">
-            {quizAnswer === null
-              ? "Pick the answer your family would shout first."
-              : quizCorrect
-                ? `✓ ${activeTrip.quiz.celebration}`
-                : "Good guess — try another family theory!"}
-          </div>
-          <small className="database-note">{syncMessage}</small>
-          {quizCorrect && <div className="earned-stamp" aria-hidden="true">MEMORY<br /><b>VERIFIED</b></div>}
-        </div>
-      </section>
-
-      <section className="tour-guides">
+        </section>
+      )}
+      <section className="tour-guides" id="family-crew">
         <div className="section-heading">
           <div>
-            <span className="handwritten-label">meet the crew</span>
-            <h2>Our tiny<br />tour guides</h2>
+            <span className="handwritten-label">meet the real crew</span>
+            <h2>Our family<br />explorers</h2>
           </div>
-          <p>Every great expedition needs specialists. These example badges are ready for your kids’ names, portraits, favorite jobs, and most legendary trip stats.</p>
+          <p>
+            These badges belong to the active people in your private family
+            book. Their memory and passport totals come straight from Neon.
+          </p>
         </div>
         <div className="guide-grid">
-          {[
-            { initials: "E", color: "coral", title: "Chief Cloud Spotter", stat: "17 rocks collected", icon: "☁️" },
-            { initials: "M", color: "blue", title: "Official Snack Inspector", stat: "9 brave bites", icon: "🥨" },
-            { initials: "J", color: "green", title: "Wildlife Detective", stat: "31 creatures found", icon: "🔎" },
-          ].map((guide, index) => (
-            <article className={`guide-card ${guide.color}`} key={guide.title}>
-              <div className="guide-number">0{index + 1}</div>
-              <div className="guide-avatar"><span>{guide.initials}</span><i aria-hidden="true">{guide.icon}</i></div>
-              <h3>{guide.title}</h3>
-              <p>{guide.stat}</p>
-              <button onClick={() => setImportOpen(true)}>Add real explorer <span>↗</span></button>
-            </article>
-          ))}
+          {familyCrew.map((member, index) => {
+            const presentation = crewPresentation(member, index);
+            return (
+              <article
+                className={`guide-card ${presentation.color}`}
+                key={member.id}
+              >
+                <div className="guide-number">
+                  {String(index + 1).padStart(2, "0")}
+                </div>
+                <div className="guide-avatar">
+                  <span>{member.displayName.charAt(0).toUpperCase()}</span>
+                  <i aria-hidden="true">{presentation.icon}</i>
+                </div>
+                <h3>{member.displayName}</h3>
+                <p>{presentation.title}</p>
+                <dl className="guide-stats">
+                  <div>
+                    <dt>Memories</dt>
+                    <dd>{member.memoryCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Stamps</dt>
+                    <dd>{member.stampCount}</dd>
+                  </div>
+                </dl>
+                <Link href="/account/settings">
+                  {isAdmin ? "Manage family" : "View my account"} <span>↗</span>
+                </Link>
+              </article>
+            );
+          })}
         </div>
       </section>
-
       <section className="next-adventure">
-        <div className="postmark" aria-hidden="true">FAMILY MAIL<br /><b>2026</b></div>
+        <div className="postmark" aria-hidden="true">FAMILY MAIL<br /><b>NEXT</b></div>
         <div className="next-copy">
           <span className="handwritten-label">the next chapter...</span>
           <h2>Where to next?</h2>
-          <p>Everyone gets one vote. Lobbying with cookies is technically allowed.</p>
+          <p>Every signed-in family explorer gets one real vote. Changing your mind updates the same ballot.</p>
         </div>
         <div className="vote-options">
           {voteOptions.map((option, index) => (
@@ -1342,7 +1408,7 @@ export default function AdventureBook({
             >
               <span aria-hidden="true">{option.emoji}</span>
               <b>{option.place}</b>
-              <small>{votes[index]} family votes</small>
+              <small>{votes[index]} family vote{votes[index] === 1 ? "" : "s"}</small>
               <i>{currentVote === option.slug ? "✓" : "＋"}</i>
             </button>
           ))}
@@ -1351,10 +1417,24 @@ export default function AdventureBook({
 
       <footer className="site-footer">
         <div className="footer-plane" aria-hidden="true">➤</div>
-        <p>Dear future us: remember the rain, the wrong turn,<br />and the pancakes at midnight.</p>
+        <p>
+          Dear future us: {bookTrips.length} chapter{bookTrips.length === 1 ? "" : "s"}, {savedMetadataCount} little moment{savedMetadataCount === 1 ? "" : "s"},<br />and one family story still growing.
+        </p>
         <div>
           <span>Made for the people we love most.</span>
-          <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>BACK TO THE COVER ↑</button>
+          <button
+            onClick={() =>
+              window.scrollTo({
+                top: 0,
+                behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+                  .matches
+                  ? "auto"
+                  : "smooth",
+              })
+            }
+          >
+            BACK TO THE COVER ↑
+          </button>
         </div>
       </footer>
 

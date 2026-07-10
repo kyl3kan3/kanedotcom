@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
@@ -13,44 +13,54 @@ import {
 } from "@/db/schema";
 import { getAuth } from "@/lib/auth/server";
 import { requireFamilyContext } from "@/lib/family";
+import {
+  isNextAdventureOptionSlug,
+  NEXT_ADVENTURE_ROUND_SLUG,
+} from "@/lib/next-adventure";
 
-const correctAnswers: Record<string, number> = {
-  yellowstone: 0,
-  beach: 0,
-  chicago: 0,
-  farm: 0,
-};
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const voteOptions = new Set([
-  "lake-michigan",
-  "smoky-mountains",
-  "backyard-campout",
-]);
-
-export async function completeTripQuiz(tripSlug: string, answer: number) {
+export async function completeTripQuiz(
+  tripId: string,
+  guessedMemoryCount: number,
+) {
   const { member } = await requireFamilyContext();
-  const expected = correctAnswers[tripSlug];
-  if (expected === undefined || !Number.isInteger(answer)) {
+  if (
+    !UUID_PATTERN.test(tripId) ||
+    !Number.isInteger(guessedMemoryCount) ||
+    guessedMemoryCount < 0
+  ) {
     throw new Error("Invalid memory-game answer.");
   }
 
   const db = getDb();
   const [trip] = await db
-    .select({ id: trips.id })
+    .select({ id: trips.id, memoryCount: count(memories.id) })
     .from(trips)
-    .where(and(eq(trips.familyId, member.familyId), eq(trips.slug, tripSlug)))
+    .leftJoin(
+      memories,
+      and(
+        eq(memories.tripId, trips.id),
+        eq(memories.familyId, member.familyId),
+        eq(memories.status, "ready"),
+        isNull(memories.deletedAt),
+      ),
+    )
+    .where(and(eq(trips.id, tripId), eq(trips.familyId, member.familyId)))
+    .groupBy(trips.id)
     .limit(1);
 
   if (!trip) throw new Error("Trip not found.");
 
-  const correct = answer === expected;
+  const correct = guessedMemoryCount === trip.memoryCount;
   await db
     .insert(tripStamps)
     .values({
       memberId: member.id,
       tripId: trip.id,
       attempts: 1,
-      lastAnswer: answer,
+      lastAnswer: guessedMemoryCount,
       completedAt: correct ? new Date() : null,
       updatedAt: new Date(),
     })
@@ -58,7 +68,7 @@ export async function completeTripQuiz(tripSlug: string, answer: number) {
       target: [tripStamps.memberId, tripStamps.tripId],
       set: {
         attempts: sql`${tripStamps.attempts} + 1`,
-        lastAnswer: answer,
+        lastAnswer: guessedMemoryCount,
         completedAt: correct
           ? sql`coalesce(${tripStamps.completedAt}, now())`
           : sql`${tripStamps.completedAt}`,
@@ -67,19 +77,21 @@ export async function completeTripQuiz(tripSlug: string, answer: number) {
     });
 
   revalidatePath("/");
-  return { correct };
+  return { correct, actualMemoryCount: trip.memoryCount };
 }
 
 export async function voteNextAdventure(optionSlug: string) {
   const { member } = await requireFamilyContext();
-  if (!voteOptions.has(optionSlug)) throw new Error("Invalid vote option.");
+  if (!isNextAdventureOptionSlug(optionSlug)) {
+    throw new Error("Invalid vote option.");
+  }
 
   const db = getDb();
   await db
     .insert(tripVotes)
     .values({
       memberId: member.id,
-      roundSlug: "next-adventure",
+      roundSlug: NEXT_ADVENTURE_ROUND_SLUG,
       optionSlug,
       updatedAt: new Date(),
     })
@@ -94,8 +106,9 @@ export async function voteNextAdventure(optionSlug: string) {
     .innerJoin(familyMembers, eq(tripVotes.memberId, familyMembers.id))
     .where(
       and(
-        eq(tripVotes.roundSlug, "next-adventure"),
+        eq(tripVotes.roundSlug, NEXT_ADVENTURE_ROUND_SLUG),
         eq(familyMembers.familyId, member.familyId),
+        eq(familyMembers.isActive, 1),
       ),
     )
     .groupBy(tripVotes.optionSlug);

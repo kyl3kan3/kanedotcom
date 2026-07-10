@@ -100,6 +100,78 @@ test("family authorization is server-derived and enforced before mutations", () 
   );
 });
 
+test("memory-game stamps use real family-scoped trip IDs and memory counts", () => {
+  const actions = read("app", "actions.ts");
+  const page = read("app", "page.tsx");
+
+  assert.match(
+    actions,
+    /completeTripQuiz\(\s*tripId:\s*string,\s*guessedMemoryCount:\s*number/,
+  );
+  assert.match(actions, /eq\(trips\.id,\s*tripId\)/);
+  assert.match(actions, /eq\(trips\.familyId,\s*member\.familyId\)/);
+  assert.match(actions, /eq\(memories\.familyId,\s*member\.familyId\)/);
+  assert.match(actions, /eq\(memories\.status,\s*["']ready["']\)/);
+  assert.match(actions, /isNull\(memories\.deletedAt\)/);
+  assert.match(actions, /guessedMemoryCount\s*===\s*trip\.memoryCount/);
+  assert.match(actions, /actualMemoryCount:\s*trip\.memoryCount/);
+  assert.doesNotMatch(actions, /correctAnswers/);
+
+  assert.match(page, /select\(\{\s*id:\s*trips\.id\s*\}\)/);
+  assert.match(page, /eq\(trips\.familyId,\s*member\.familyId\)/);
+  assert.match(
+    page,
+    /initialStampedTrips=\{stampRows\.map\(\(row\)\s*=>\s*row\.id\)\}/,
+  );
+});
+
+test("crew and next-adventure totals come from active family data", () => {
+  const actions = read("app", "actions.ts");
+  const page = read("app", "page.tsx");
+  const voting = read("lib", "next-adventure.ts");
+
+  assert.match(page, /id:\s*familyMembers\.id/);
+  assert.match(page, /displayName:\s*familyMembers\.displayName/);
+  assert.match(page, /eq\(familyMembers\.isActive,\s*1\)/);
+  assert.match(page, /memberId:\s*memories\.uploadedByMemberId/);
+  assert.match(page, /memberId:\s*tripStamps\.memberId/);
+  assert.match(page, /familyCrew=\{crewRows\.map/);
+  assert.match(page, /memoryCount:\s*memoryCountsByMember\.get/);
+  assert.match(page, /stampCount:\s*stampCountsByMember\.get/);
+
+  assert.match(voting, /NEXT_ADVENTURE_ROUND_SLUG/);
+  assert.match(voting, /NEXT_ADVENTURE_OPTIONS/);
+  for (const slug of [
+    "lake-michigan",
+    "smoky-mountains",
+    "backyard-campout",
+  ]) {
+    assert.match(voting, new RegExp(`["']${slug}["']`));
+  }
+  assert.match(actions, /from\s+["']@\/lib\/next-adventure["']/);
+  assert.match(page, /from\s+["']@\/lib\/next-adventure["']/);
+  assert.match(actions, /eq\(familyMembers\.isActive,\s*1\)/);
+  assert.doesNotMatch(actions, /const\s+voteOptions\s*=\s*new Set/);
+});
+
+test("approved trips power the cover, memory trail, chapter reader, and game", () => {
+  const client = read("app", "adventure-book.tsx");
+  const styles = read("app", "globals.css");
+
+  assert.match(client, /generatedTrips\.map\(\(trip,\s*index\)/);
+  assert.match(client, /className=["']memory-trail["']/);
+  assert.match(client, /activeTrip\.memories\.length/);
+  assert.match(client, /activeTrip\.photos/);
+  assert.match(client, /activeTrip\.videos/);
+  assert.match(client, /familyCrew\.map/);
+  assert.match(styles, /\.memory-trail\s*\{/);
+  assert.match(styles, /scroll-snap-type:\s*x\s+mandatory/);
+
+  assert.doesNotMatch(client, /images\.unsplash\.com|videos\.pexels\.com/);
+  assert.doesNotMatch(client, /Yellowstone|Cloud factories|MEET PICKLES/);
+  assert.doesNotMatch(client, /baseVotes|1,842|example badges/i);
+});
+
 test("Drizzle targets Neon PostgreSQL with family-scoped relational tables", () => {
   const config = read("drizzle.config.ts");
   const database = read("db", "index.ts");
@@ -349,5 +421,9 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
 test("trip dates use one family timezone during server and client rendering", () => {
   const client = read("app", "adventure-book.tsx");
 
-  assert.match(client, /timeZone:\s*["']America\/Chicago["']/);
+  assert.match(
+    client,
+    /const\s+FAMILY_TIME_ZONE\s*=\s*["']America\/Chicago["']/,
+  );
+  assert.match(client, /timeZone:\s*FAMILY_TIME_ZONE/);
 });

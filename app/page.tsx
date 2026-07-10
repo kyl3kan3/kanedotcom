@@ -11,6 +11,7 @@ import {
   trips,
 } from "@/db/schema";
 import { getFamilyContext } from "@/lib/family";
+import { NEXT_ADVENTURE_ROUND_SLUG } from "@/lib/next-adventure";
 
 export const dynamic = "force-dynamic";
 
@@ -64,14 +65,18 @@ export default async function Home() {
     memoryCountRows,
     readyMemoryRows,
     generatedTripRows,
+    crewRows,
+    crewMemoryRows,
+    crewStampRows,
   ] = await Promise.all([
     db
-      .select({ slug: trips.slug })
+      .select({ id: trips.id })
       .from(tripStamps)
       .innerJoin(trips, eq(tripStamps.tripId, trips.id))
       .where(
         and(
           eq(tripStamps.memberId, member.id),
+          eq(trips.familyId, member.familyId),
           isNotNull(tripStamps.completedAt),
         ),
       ),
@@ -81,8 +86,9 @@ export default async function Home() {
       .innerJoin(familyMembers, eq(tripVotes.memberId, familyMembers.id))
       .where(
         and(
-          eq(tripVotes.roundSlug, "next-adventure"),
+          eq(tripVotes.roundSlug, NEXT_ADVENTURE_ROUND_SLUG),
           eq(familyMembers.familyId, member.familyId),
+          eq(familyMembers.isActive, 1),
         ),
       )
       .groupBy(tripVotes.optionSlug),
@@ -92,7 +98,7 @@ export default async function Home() {
       .where(
         and(
           eq(tripVotes.memberId, member.id),
-          eq(tripVotes.roundSlug, "next-adventure"),
+          eq(tripVotes.roundSlug, NEXT_ADVENTURE_ROUND_SLUG),
         ),
       )
       .limit(1),
@@ -135,6 +141,10 @@ export default async function Home() {
         memoryName: memories.originalName,
         memoryKind: memories.kind,
         memoryCaption: memories.caption,
+        memoryCapturedAt: memories.capturedAt,
+        memoryDurationMs: memories.durationMs,
+        memoryWidth: memories.width,
+        memoryHeight: memories.height,
       })
       .from(trips)
       .leftJoin(
@@ -148,8 +158,75 @@ export default async function Home() {
       .where(
         and(eq(trips.familyId, member.familyId), eq(trips.source, "ai")),
       )
-      .orderBy(desc(trips.createdAt), asc(memories.capturedAt)),
+      .orderBy(
+        asc(trips.startAt),
+        asc(trips.sortOrder),
+        asc(memories.capturedAt),
+      ),
+    db
+      .select({
+        id: familyMembers.id,
+        displayName: familyMembers.displayName,
+        role: familyMembers.role,
+      })
+      .from(familyMembers)
+      .where(
+        and(
+          eq(familyMembers.familyId, member.familyId),
+          eq(familyMembers.isActive, 1),
+        ),
+      )
+      .orderBy(asc(familyMembers.createdAt)),
+    db
+      .select({
+        memberId: memories.uploadedByMemberId,
+        total: count(),
+      })
+      .from(memories)
+      .innerJoin(
+        familyMembers,
+        eq(memories.uploadedByMemberId, familyMembers.id),
+      )
+      .where(
+        and(
+          eq(memories.familyId, member.familyId),
+          eq(memories.status, "ready"),
+          isNull(memories.deletedAt),
+          eq(familyMembers.familyId, member.familyId),
+          eq(familyMembers.isActive, 1),
+        ),
+      )
+      .groupBy(memories.uploadedByMemberId),
+    db
+      .select({
+        memberId: tripStamps.memberId,
+        total: count(),
+      })
+      .from(tripStamps)
+      .innerJoin(
+        familyMembers,
+        eq(tripStamps.memberId, familyMembers.id),
+      )
+      .innerJoin(trips, eq(tripStamps.tripId, trips.id))
+      .where(
+        and(
+          eq(familyMembers.familyId, member.familyId),
+          eq(familyMembers.isActive, 1),
+          eq(trips.familyId, member.familyId),
+          isNotNull(tripStamps.completedAt),
+        ),
+      )
+      .groupBy(tripStamps.memberId),
   ]);
+
+  const memoryCountsByMember = new Map(
+    crewMemoryRows.flatMap((row) =>
+      row.memberId ? [[row.memberId, row.total] as const] : [],
+    ),
+  );
+  const stampCountsByMember = new Map(
+    crewStampRows.map((row) => [row.memberId, row.total] as const),
+  );
 
   const generatedTrips = new Map<
     string,
@@ -165,6 +242,10 @@ export default async function Home() {
         kind: "image" | "video";
         caption: string;
         url: string;
+        capturedAt: string | null;
+        durationMs: number | null;
+        width: number | null;
+        height: number | null;
       }>;
     }
   >();
@@ -185,6 +266,10 @@ export default async function Home() {
         kind: row.memoryKind,
         caption: row.memoryCaption ?? "A family memory.",
         url: `/api/memories/${row.memoryId}`,
+        capturedAt: row.memoryCapturedAt?.toISOString() ?? null,
+        durationMs: row.memoryDurationMs,
+        width: row.memoryWidth,
+        height: row.memoryHeight,
       });
     }
     generatedTrips.set(row.tripId, trip);
@@ -195,7 +280,12 @@ export default async function Home() {
       memberName={member.displayName || user.name || "Family explorer"}
       memberRole={member.role}
       isAdmin={member.role === "owner"}
-      initialStampedTrips={stampRows.map((row) => row.slug)}
+      initialStampedTrips={stampRows.map((row) => row.id)}
+      familyCrew={crewRows.map((crewMember) => ({
+        ...crewMember,
+        memoryCount: memoryCountsByMember.get(crewMember.id) ?? 0,
+        stampCount: stampCountsByMember.get(crewMember.id) ?? 0,
+      }))}
       initialVoteCounts={Object.fromEntries(
         voteRows.map((row) => [row.optionSlug, row.total]),
       )}
