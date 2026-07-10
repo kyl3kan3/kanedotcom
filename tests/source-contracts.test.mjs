@@ -248,6 +248,7 @@ test("Google Photos connection is configuration-aware and browser-safe", () => {
   assert.match(proxy, /\/auth\/google-photos-return/);
   assert.match(proxy, /startsWith\(["']\/api\/photos\/google\/["']\)/);
   assert.match(proxy, /\/api\/photos\/google\/[\s\S]*NextResponse\.next\(\)/);
+  assert.match(proxy, /startsWith\(["']\/api\/memories\/["']\)/);
 
   const popupIndex = client.indexOf('window.open(\n      "about:blank"');
   const sessionFetchIndex = client.indexOf(
