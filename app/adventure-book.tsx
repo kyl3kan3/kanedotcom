@@ -20,9 +20,7 @@ import {
 
 type GeneratedMemory = {
   id: string;
-  name: string;
   kind: "image" | "video";
-  caption: string;
   url: string;
   capturedAt: string | null;
   durationMs: number | null;
@@ -122,6 +120,12 @@ function formatDuration(durationMs: number | null) {
   return `${minutes}:${seconds}`;
 }
 
+function familyMemoryAlt(chapterTitle?: string) {
+  return chapterTitle
+    ? `Family memory from ${chapterTitle}`
+    : "Private family memory";
+}
+
 function memoryCountAnswers(total: number, chapterIndex: number) {
   const candidates = [
     total,
@@ -189,7 +193,6 @@ type TripDraft = {
   memories: Array<{
     id: string;
     kind: "image" | "video";
-    caption: string;
     url: string;
   }>;
 };
@@ -272,7 +275,7 @@ export default function AdventureBook({
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
   const [stampedTrips, setStampedTrips] = useState(initialStampedTrips);
   const [lightbox, setLightbox] = useState<
-    { src: string; alt: string; caption: string } | undefined
+    { src: string; alt: string } | undefined
   >();
   const [importOpen, setImportOpen] = useState(false);
   const [organizerOpen, setOrganizerOpen] = useState(false);
@@ -280,7 +283,7 @@ export default function AdventureBook({
     "idle" | "loading" | "analyzing" | "review" | "saving" | "done" | "error"
   >("idle");
   const [organizerMessage, setOrganizerMessage] = useState(
-    "AI can turn capture dates and visual clues into trip chapter drafts.",
+    "AI can group capture dates while the family calendar supplies exact holiday context.",
   );
   const [tripDrafts, setTripDrafts] = useState<TripDraft[]>([]);
   const [organizerRunId, setOrganizerRunId] = useState<string | null>(null);
@@ -368,7 +371,6 @@ export default function AdventureBook({
       )
       .map((memory) => ({
         ...memory,
-        caption: memory.name,
         chapterTitle: "Ready for a chapter",
       })),
   ];
@@ -549,7 +551,7 @@ export default function AdventureBook({
       setOrganizerState("idle");
       setOrganizerMessage(
         (result.unassignedCount ?? 0) > 0
-          ? "Ready to read capture dates and visual clues from the unorganized memories."
+          ? "Ready to group the unorganized memories by capture date and known holiday context."
           : "Every permanent memory is already in a trip chapter.",
       );
     }
@@ -580,7 +582,7 @@ export default function AdventureBook({
     setOrganizerOpen(true);
     setOrganizerState("analyzing");
     setOrganizerMessage(
-      "Reading capture dates, comparing scenes, and writing private chapter drafts...",
+      "Reading capture dates, checking the family holiday calendar, and preparing private chapter groups...",
     );
     try {
       const response = await fetch("/api/memories/organize", { method: "POST" });
@@ -1178,7 +1180,7 @@ export default function AdventureBook({
                 className={`fan-photo ${["fan-one", "fan-two", "fan-three"][index]}`}
                 key={photo.id}
               >
-                <img src={photo.url} alt={photo.caption} />
+                <img src={photo.url} alt={familyMemoryAlt(photo.chapterTitle)} />
                 <figcaption>{shortenTitle(photo.chapterTitle, 19).toUpperCase()}</figcaption>
               </figure>
             ))}
@@ -1229,13 +1231,16 @@ export default function AdventureBook({
             {importedMedia.slice(0, 8).map((media) =>
               media.kind === "image" ? (
                 <figure key={media.id}>
-                  <img src={media.url} alt={media.name} loading="lazy" />
-                  <figcaption>{media.name}</figcaption>
+                  <img src={media.url} alt="Private family memory" loading="lazy" />
                 </figure>
               ) : (
                 <figure key={media.id}>
-                  <video src={media.url} controls preload="metadata" />
-                  <figcaption>{media.name}</figcaption>
+                  <video
+                    src={media.url}
+                    aria-label="Private family video"
+                    controls
+                    preload="metadata"
+                  />
                 </figure>
               ),
             )}
@@ -1251,8 +1256,9 @@ export default function AdventureBook({
                 <h2>Our real family chapter shelf</h2>
             </div>
             <p>
-              Capture dates helped sort the moments. Every chapter here was
-              reviewed by a family admin before it joined the book.
+              Capture dates and known calendar holidays label these chapters.
+              Every chapter here was reviewed by a family admin before it
+              joined the book.
             </p>
           </div>
           <div className="generated-trip-grid">
@@ -1274,15 +1280,17 @@ export default function AdventureBook({
                       {memory.kind === "image" ? (
                         <img
                           src={memory.url}
-                          alt={memory.caption}
+                          alt={familyMemoryAlt(trip.title)}
                           loading="lazy"
                         />
                       ) : (
-                        <video src={memory.url} controls preload="metadata" />
+                        <video
+                          src={memory.url}
+                          aria-label={`Family video from ${trip.title}`}
+                          controls
+                          preload="metadata"
+                        />
                       )}
-                      <figcaption>
-                        <MessageResponse>{memory.caption}</MessageResponse>
-                      </figcaption>
                     </figure>
                   ))}
                 </div>
@@ -1412,24 +1420,26 @@ export default function AdventureBook({
                             relative === 0
                               ? setLightbox({
                                   src: photo.url,
-                                  alt: photo.caption,
-                                  caption: photo.caption,
+                                  alt: familyMemoryAlt(activeTrip.title),
                                 })
                               : setPhotoIndex(index)
                           }
                           aria-label={
                             relative === 0
-                              ? `View full size: ${photo.caption}`
-                              : `Show photo ${index + 1}: ${photo.caption}`
+                              ? `View a family photo from ${activeTrip.title} full size`
+                              : `Show photo ${index + 1} from ${activeTrip.title}`
                           }
                           aria-hidden={relative !== 0}
                           tabIndex={relative === 0 ? 0 : -1}
                         >
                           <img
                             src={photo.url}
-                            alt={relative === 0 ? photo.caption : ""}
+                            alt={
+                              relative === 0
+                                ? familyMemoryAlt(activeTrip.title)
+                                : ""
+                            }
                           />
-                          <span>{photo.caption}</span>
                         </button>
                       );
                     })}
@@ -1463,8 +1473,8 @@ export default function AdventureBook({
                     </div>
                   )}
                   <p className="photo-live-status" role="status">
-                    Showing photo {photoIndex + 1} of {activeTrip.photos.length}:{" "}
-                    {activeTrip.photos[photoIndex]?.caption}
+                    Showing photo {photoIndex + 1} of {activeTrip.photos.length}
+                    from {activeTrip.title}.
                   </p>
                 </>
               ) : (
@@ -1476,14 +1486,6 @@ export default function AdventureBook({
             </div>
 
             <div className="chapter-side">
-              <div className="chapter-note-card">
-                <span className="chapter-note-label">favorite details</span>
-                <ul>
-                  {activeTrip.memories.slice(0, 3).map((memory) => (
-                    <li key={memory.id}>{memory.caption}</li>
-                  ))}
-                </ul>
-              </div>
               <div className="trip-stats" aria-label="Chapter media counts">
                 <div>
                   <span aria-hidden="true">✦</span>
@@ -1516,7 +1518,6 @@ export default function AdventureBook({
                     Your browser does not support this family video.
                   </video>
                   <p>
-                    {activeTrip.videos[0].caption}
                     <span>{formatDuration(activeTrip.videos[0].durationMs)}</span>
                   </p>
                 </div>
@@ -1687,7 +1688,6 @@ export default function AdventureBook({
           <div className="lightbox" role="dialog" aria-modal="true" aria-label="Trip photo" onMouseDown={(event) => event.stopPropagation()}>
             <button className="dialog-close" onClick={() => setLightbox(undefined)} aria-label="Close photo">×</button>
             <img src={lightbox.src} alt={lightbox.alt} />
-            <p>{lightbox.caption}</p>
           </div>
         </div>
       )}
@@ -1739,9 +1739,9 @@ export default function AdventureBook({
                     <div><b>Your family memory shelf</b><button onClick={clearImportedMedia}>Hide previews</button></div>
                     <div className="import-grid">
                       {importedMedia.slice(0, 60).map((media) => media.kind === "image" ? (
-                        <figure key={media.id}><img src={media.url} alt={media.name} loading="lazy" /><figcaption>{media.name}</figcaption></figure>
+                        <figure key={media.id}><img src={media.url} alt="Imported family memory" loading="lazy" /></figure>
                       ) : (
-                        <figure key={media.id}><video src={media.url} controls preload="metadata" /><figcaption>{media.name}</figcaption></figure>
+                        <figure key={media.id}><video src={media.url} aria-label="Imported family video" controls preload="metadata" /></figure>
                       ))}
                     </div>
                     {importedMedia.length > 60 && (
@@ -1876,7 +1876,7 @@ export default function AdventureBook({
                 <ol>
                   <li className={organizerState === "analyzing" ? "active" : ""}>
                     <span>1</span>
-                    <div><b>Read safe metadata</b><small>Capture dates, dimensions, and file details</small></div>
+                    <div><b>Read safe metadata</b><small>Capture dates, known holidays, dimensions, and file details</small></div>
                   </li>
                   <li className={organizerState === "analyzing" ? "active" : ""}>
                     <span>2</span>
@@ -1899,8 +1899,10 @@ export default function AdventureBook({
                     : "The shelf is already organized"}
                 </h3>
                 <p>
-                  The AI can suggest dates, titles, groupings, and kid-friendly
-                  captions. It does not publish or identify anyone.
+                  The organizer uses capture dates, exact holiday dates, and
+                  small previews to suggest neutral chapter groupings. It does
+                  not write a description for every photo, publish, or identify
+                  anyone.
                 </p>
                 <button
                   className="primary-button"
@@ -1944,13 +1946,6 @@ export default function AdventureBook({
                         <MessageResponse className="trip-draft-summary">
                           {draft.summary}
                         </MessageResponse>
-                        <div className="trip-draft-caption-samples">
-                          {draft.memories.slice(0, 2).map((memory) => (
-                            <MessageResponse key={memory.id}>
-                              {memory.caption}
-                            </MessageResponse>
-                          ))}
-                        </div>
                         <button
                           className="draft-review-button"
                           onClick={() => toggleDraftApproval(draft.id)}

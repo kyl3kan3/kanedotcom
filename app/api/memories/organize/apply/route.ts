@@ -17,6 +17,7 @@ import {
   trips,
 } from "@/db/schema";
 import { requireFamilyAdmin } from "@/lib/family";
+import { normalizeFamilyTripPresentation } from "@/lib/family-holidays";
 
 const applySchema = z.object({
   runId: z.string().uuid(),
@@ -58,10 +59,6 @@ export async function POST(request: Request) {
   const selectedDrafts = await db
     .select({
       id: tripDrafts.id,
-      title: tripDrafts.title,
-      summary: tripDrafts.summary,
-      startAt: tripDrafts.startAt,
-      endAt: tripDrafts.endAt,
       status: tripDrafts.status,
       approvedTripId: tripDrafts.approvedTripId,
     })
@@ -102,7 +99,8 @@ export async function POST(request: Request) {
     .select({
       draftId: tripDrafts.id,
       memoryId: memories.id,
-      caption: tripDraftMemories.caption,
+      memoryKind: memories.kind,
+      memoryCapturedAt: memories.capturedAt,
       existingTripId: memories.tripId,
     })
     .from(tripDrafts)
@@ -138,24 +136,34 @@ export async function POST(request: Request) {
     .from(trips)
     .where(eq(trips.familyId, context.member.familyId));
 
-  const tripRows = selectedDrafts.map((draft, index) => ({
-    id: crypto.randomUUID(),
-    familyId: context.member.familyId,
-    slug: slugify(draft.title, draft.id.slice(0, 8)),
-    title: draft.title,
-    summary: draft.summary,
-    source: "ai" as const,
-    startAt: draft.startAt,
-    endAt: draft.endAt,
-    sortOrder: Number(nextSortOrder) + index,
-  }));
+  const tripRows = selectedDrafts.map((draft, index) => {
+    const presentation = normalizeFamilyTripPresentation(
+      memoryRows
+        .filter((memory) => memory.draftId === draft.id)
+        .map((memory) => ({
+          kind: memory.memoryKind,
+          capturedAt: memory.memoryCapturedAt,
+        })),
+    );
+    return {
+      id: crypto.randomUUID(),
+      familyId: context.member.familyId,
+      slug: slugify(presentation.title, draft.id.slice(0, 8)),
+      title: presentation.title,
+      summary: presentation.summary,
+      source: "ai" as const,
+      startAt: presentation.startAt,
+      endAt: presentation.endAt,
+      sortOrder: Number(nextSortOrder) + index,
+    };
+  });
   const tripIdByDraft = new Map(
     selectedDrafts.map((draft, index) => [draft.id, tripRows[index].id]),
   );
   const assignments = memoryRows.map((memory) => ({
     memoryId: memory.memoryId,
     tripId: tripIdByDraft.get(memory.draftId)!,
-    caption: memory.caption,
+    caption: "",
   }));
   const approvals = selectedDrafts.map((draft) => ({
     draftId: draft.id,

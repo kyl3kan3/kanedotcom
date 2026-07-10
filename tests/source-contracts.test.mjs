@@ -439,6 +439,7 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   );
   const client = read("app", "adventure-book.tsx");
   const page = read("app", "page.tsx");
+  const holidays = read("lib", "family-holidays.ts");
   const envExample = read(".env.example");
 
   assert.match(packageJson.dependencies.ai, /^\^6\./);
@@ -454,12 +455,18 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(organizer, /imageDetail:\s*["']low["']/);
   assert.match(organizer, /eq\(memories\.familyId,\s*context\.member\.familyId\)/);
   assert.doesNotMatch(organizer, /request\.json|body\.familyId/);
+  assert.doesNotMatch(organizer, /caption:\s*z\.string/);
+  assert.match(organizer, /buildFactualFamilyChapter/);
+  assert.match(organizer, /Do not write titles, summaries, captions/);
+  assert.match(organizer, /caption:\s*["']["']/);
 
   assert.match(apply, /requireFamilyAdmin\(\)/);
   assert.match(apply, /db\.batch\(/);
   assert.match(apply, /jsonb_to_recordset/);
   assert.match(apply, /eq\(tripDrafts\.familyId,\s*context\.member\.familyId\)/);
   assert.doesNotMatch(apply, /body\.familyId|familyId:\s*parsed\.data/);
+  assert.match(apply, /normalizeFamilyTripPresentation/);
+  assert.match(apply, /caption:\s*["']["']/);
 
   assert.match(client, /data-testid=["']organize-memories["']/);
   assert.match(client, /data-testid=["']memory-organizer["']/);
@@ -471,6 +478,16 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(client, /next AI review/);
   assert.match(page, /\.limit\(60\)/);
   assert.match(page, /eq\(trips\.source,\s*["']ai["']\)/);
+  assert.match(page, /normalizeFamilyTripPresentation/);
+  assert.doesNotMatch(page, /memoryCaption/);
+  assert.doesNotMatch(client, /\{media\.name\}|\{memory\.caption\}/);
+  assert.match(holidays, /FAMILY_TIME_ZONE\s*=\s*["']America\/Chicago["']/);
+  assert.match(holidays, /id:\s*["']fathers-day["']/);
+  assert.match(holidays, /id:\s*["']fourth-of-july["']/);
+  assert.match(holidays, /fourthOfJulyWeekendOffsets\(year\)/);
+  assert.match(holidays, /weekday\s*===\s*5/);
+  assert.match(holidays, /weekday\s*===\s*1/);
+  assert.match(holidays, /localDateSpanDays\s*<=\s*4/);
   assert.match(envExample, /^OPENAI_API_KEY=/m);
   assert.match(envExample, /^AI_ORGANIZER_MODEL=/m);
 });

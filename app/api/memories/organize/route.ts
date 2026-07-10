@@ -25,6 +25,12 @@ import {
 } from "@/db/schema";
 import { requireFamilyAdmin } from "@/lib/family";
 import {
+  buildFactualFamilyChapter,
+  familyHolidayForCaptureDate,
+  FAMILY_TIME_ZONE,
+  normalizeFamilyTripPresentation,
+} from "@/lib/family-holidays";
+import {
   prepareMemoryForAi,
   type MemoryAnalysisInput,
   type PreparedMemory,
@@ -38,14 +44,11 @@ const proposalSchema = z.object({
   trips: z
     .array(
       z.object({
-        title: z.string().min(3).max(80),
-        summary: z.string().min(10).max(400),
         confidence: z.enum(["high", "medium", "low"]),
         memories: z
           .array(
             z.object({
               alias: z.string().min(2).max(8),
-              caption: z.string().min(3).max(180),
             }),
           )
           .min(1),
@@ -72,35 +75,6 @@ type DraftResponse = {
   }>;
 };
 
-function cleanAiText(value: string, maximumLength: number) {
-  return value.replace(/\s+/g, " ").trim().slice(0, maximumLength);
-}
-
-function dateRangeForMemories(items: PreparedMemory[]) {
-  const dates = items
-    .map((item) => item.metadata.capturedAt)
-    .filter(
-      (date): date is Date =>
-        Boolean(date) && Math.abs(date!.getTime()) > 24 * 60 * 60 * 1000,
-    )
-    .sort((left, right) => left.getTime() - right.getTime());
-  return {
-    startAt: dates[0] ?? null,
-    endAt: dates.at(-1) ?? null,
-  };
-}
-
-function fallbackCaption(item: PreparedMemory) {
-  const month = item.metadata.capturedAt?.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return month
-    ? `A family ${item.memory.kind} from ${month}.`
-    : "A family memory waiting for its story.";
-}
-
 function validateAndCompleteProposal(
   proposal: Proposal,
   prepared: PreparedMemory[],
@@ -123,13 +97,10 @@ function validateAndCompleteProposal(
       return {
         alias,
         item,
-        caption: cleanAiText(entry.caption, 180),
       };
     });
 
     return {
-      title: cleanAiText(trip.title, 80),
-      summary: cleanAiText(trip.summary, 400),
       confidence: trip.confidence,
       assigned,
     };
@@ -140,14 +111,10 @@ function validateAndCompleteProposal(
     .map(([alias, item]) => ({
       alias,
       item,
-      caption: fallbackCaption(item),
     }));
 
   if (omitted.length > 0) {
     groups.push({
-      title: "More family moments",
-      summary:
-        "These memories did not have enough reliable context for a specific trip yet, so they are staying together for the family to review.",
       confidence: "low" as const,
       assigned: omitted,
     });
@@ -198,6 +165,7 @@ async function loadLatestDrafts(familyId: string) {
       endAt: tripDrafts.endAt,
       memoryId: memories.id,
       memoryKind: memories.kind,
+      memoryCapturedAt: memories.capturedAt,
       caption: tripDraftMemories.caption,
       sortOrder: tripDraftMemories.sortOrder,
     })
@@ -218,7 +186,12 @@ async function loadLatestDrafts(familyId: string) {
     )
     .orderBy(asc(tripDrafts.createdAt), asc(tripDraftMemories.sortOrder));
 
-  const grouped = new Map<string, DraftResponse>();
+  const grouped = new Map<
+    string,
+    Omit<DraftResponse, "memories"> & {
+      memories: Array<DraftResponse["memories"][number] & { capturedAt: Date | null }>;
+    }
+  >();
   for (const row of rows) {
     const draft = grouped.get(row.id) ?? {
       id: row.id,
@@ -234,13 +207,31 @@ async function loadLatestDrafts(familyId: string) {
       kind: row.memoryKind,
       caption: row.caption,
       url: `/api/memories/${row.memoryId}`,
+      capturedAt: row.memoryCapturedAt,
     });
     grouped.set(row.id, draft);
   }
 
+  const drafts = [...grouped.values()].map((draft) => {
+    const presentation = normalizeFamilyTripPresentation(draft.memories);
+    return {
+      ...draft,
+      title: presentation.title,
+      summary: presentation.summary,
+      startAt: presentation.startAt?.toISOString() ?? null,
+      endAt: presentation.endAt?.toISOString() ?? null,
+      memories: draft.memories.map((memory) => ({
+        id: memory.id,
+        kind: memory.kind,
+        caption: "",
+        url: memory.url,
+      })),
+    } satisfies DraftResponse;
+  });
+
   return {
     runId: latest.runId,
-    drafts: [...grouped.values()],
+    drafts,
     unassignedCount: unassigned?.total ?? 0,
   };
 }
@@ -315,17 +306,20 @@ function buildModelContent(prepared: PreparedMemory[]) {
     const duration = item.metadata.durationMs
       ? `${Math.round(item.metadata.durationMs / 1000)} seconds`
       : "not applicable or unknown";
-    return `${alias}: ${item.memory.kind}; captured ${captured}; dimensions ${dimensions}; duration ${duration}; visual ${item.thumbnail ? "attached below" : "not available"}.`;
+    const holiday = familyHolidayForCaptureDate(item.metadata.capturedAt);
+    return `${alias}: ${item.memory.kind}; captured ${captured}; ${FAMILY_TIME_ZONE} calendar context ${holiday ? `${holiday.name} (${holiday.matchKind})` : "none"}; dimensions ${dimensions}; duration ${duration}; visual ${item.thumbnail ? "attached below" : "not available"}.`;
   });
 
   const content: Array<TextPart | ImagePart> = [
     {
       type: "text",
       text: [
-        "Organize every listed family memory exactly once into likely trips or day-out chapters.",
+        "Organize every listed family memory exactly once into date-based chapter groups.",
         "Use capture-time gaps as the strongest grouping signal and visible scene similarity as supporting evidence.",
+        "Prefer one group for memories sharing the same supplied holiday or holiday-weekend calendar context, even when the visible scene changes.",
         "Return 1 to 8 groups. Keep uncertain items together rather than inventing facts.",
-        "Write short, warm, kid-friendly titles, summaries, and captions. Use no Markdown.",
+        "Return only the alias membership and grouping confidence. Do not write titles, summaries, captions, descriptions, locations, activities, or holiday claims.",
+        `Holiday labels in the inventory are deterministic calendar matches in ${FAMILY_TIME_ZONE}; never infer a holiday from visual appearance.`,
         "Memory inventory:",
         ...aliases,
       ].join("\n"),
@@ -434,9 +428,11 @@ export async function POST() {
     const { output } = await generateText({
       model: openai(model),
       system: [
-        "You organize private family photos into factual scrapbook chapter drafts.",
+        "You organize private family photos into reviewable scrapbook chapter groups.",
         "Do not identify people, infer sensitive traits, invent names, invent quotes, or claim a location unless an unmistakable public landmark is visible.",
-        "Capture dates are factual metadata. Visual descriptions may describe only what is plainly visible.",
+        "Capture dates and explicitly supplied calendar labels are factual metadata.",
+        "Never infer a holiday from decorations, clothing, food, people, or any other image appearance.",
+        "Do not generate prose about the media; the server creates titles and summaries only from dates, media counts, and exact calendar matches.",
         "Every supplied memory alias must appear exactly once across the groups.",
       ].join(" "),
       messages: [{ role: "user", content: buildModelContent(prepared) }],
@@ -453,16 +449,21 @@ export async function POST() {
     const groups = validateAndCompleteProposal(output, prepared);
     const runId = crypto.randomUUID();
     const draftRows = groups.map((group) => {
-      const range = dateRangeForMemories(group.assigned.map(({ item }) => item));
+      const presentation = buildFactualFamilyChapter(
+        group.assigned.map(({ item }) => ({
+          kind: item.memory.kind,
+          capturedAt: item.metadata.capturedAt,
+        })),
+      );
       return {
         id: crypto.randomUUID(),
         runId,
         familyId: context.member.familyId,
         createdByMemberId: context.member.id,
-        title: group.title,
-        summary: group.summary,
-        startAt: range.startAt,
-        endAt: range.endAt,
+        title: presentation.title,
+        summary: presentation.summary,
+        startAt: presentation.startAt,
+        endAt: presentation.endAt,
         aiModel: model,
       };
     });
@@ -471,7 +472,7 @@ export async function POST() {
         draftId: draft.id,
         memoryId: assignment.item.memory.id,
         sortOrder: memoryIndex,
-        caption: assignment.caption,
+        caption: "",
       })),
     );
 

@@ -11,6 +11,7 @@ import {
   trips,
 } from "@/db/schema";
 import { getFamilyContext } from "@/lib/family";
+import { normalizeFamilyTripPresentation } from "@/lib/family-holidays";
 import { NEXT_ADVENTURE_ROUND_SLUG } from "@/lib/next-adventure";
 
 export const dynamic = "force-dynamic";
@@ -138,9 +139,7 @@ export default async function Home() {
         startAt: trips.startAt,
         endAt: trips.endAt,
         memoryId: memories.id,
-        memoryName: memories.originalName,
         memoryKind: memories.kind,
-        memoryCaption: memories.caption,
         memoryCapturedAt: memories.capturedAt,
         memoryDurationMs: memories.durationMs,
         memoryWidth: memories.width,
@@ -238,9 +237,7 @@ export default async function Home() {
       endAt: string | null;
       memories: Array<{
         id: string;
-        name: string;
         kind: "image" | "video";
-        caption: string;
         url: string;
         capturedAt: string | null;
         durationMs: number | null;
@@ -259,12 +256,10 @@ export default async function Home() {
       endAt: row.endAt?.toISOString() ?? null,
       memories: [],
     };
-    if (row.memoryId && row.memoryName && row.memoryKind) {
+    if (row.memoryId && row.memoryKind) {
       trip.memories.push({
         id: row.memoryId,
-        name: row.memoryName,
         kind: row.memoryKind,
-        caption: row.memoryCaption ?? "A family memory.",
         url: `/api/memories/${row.memoryId}`,
         capturedAt: row.memoryCapturedAt?.toISOString() ?? null,
         durationMs: row.memoryDurationMs,
@@ -274,6 +269,22 @@ export default async function Home() {
     }
     generatedTrips.set(row.tripId, trip);
   }
+
+  const approvedTrips = [...generatedTrips.values()].map((trip) => {
+    const presentation = normalizeFamilyTripPresentation(
+      trip.memories.map((memory) => ({
+        kind: memory.kind,
+        capturedAt: memory.capturedAt,
+      })),
+    );
+    return {
+      ...trip,
+      title: presentation.title,
+      summary: presentation.summary,
+      startAt: presentation.startAt?.toISOString() ?? null,
+      endAt: presentation.endAt?.toISOString() ?? null,
+    };
+  });
 
   return (
     <AdventureBook
@@ -295,7 +306,7 @@ export default async function Home() {
         source: "google_photos" as const,
         url: `/api/memories/${memory.id}`,
       }))}
-      generatedTrips={[...generatedTrips.values()]}
+      generatedTrips={approvedTrips}
       savedMemoryCount={memoryCountRows[0]?.total ?? 0}
     />
   );

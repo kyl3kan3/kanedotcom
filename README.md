@@ -19,9 +19,11 @@ and an add-memories flow.
 - **Media:** device selections are previewed in the browser and recorded as
   metadata. Admin-selected Google Photos are copied into private Vercel Blob
   storage, while Neon stores their family-scoped records and access checks.
-- **AI organizer:** an admin-only OpenAI vision flow reads capture metadata and
-  small 512px working previews, then stores reviewable trip drafts. Trips and
-  captions are not published until the family admin approves them.
+- **AI organizer:** an admin-only OpenAI vision flow uses capture metadata and
+  small 512px working previews only to group memories. Chapter titles and
+  summaries are produced by server-side date, media-count, and family-holiday
+  rules, while individual photo captions and camera filenames stay out of the
+  interface. Drafts remain private until the family admin approves them.
 
 The interactive client is in `app/adventure-book.tsx`. The server page in
 `app/page.tsx` loads the signed-in family member's state, while mutations in
@@ -160,10 +162,14 @@ therefore cannot reliably stream old memories from Google on demand; permanent
 private Blob copies are required for a durable family book.
 
 After a successful admin import, the organizer automatically prepares private
-trip drafts. It uses capture-time gaps as the strongest signal and visible scene
-similarity as supporting evidence. OpenAI request storage is disabled; only
-small working previews are sent, and every draft requires admin approval before
-it can assign memories or captions to a trip.
+trip drafts. It uses capture-time gaps as the strongest grouping signal and
+visible scene similarity only as supporting evidence. OpenAI returns group
+membership rather than prose. The server then writes factual chapter text from
+capture dates, photo/video counts, and a deterministic America/Chicago holiday
+calendar. This recognizes occasions such as Father's Day and Fourth of July
+weekend without guessing a holiday from image appearance. OpenAI request
+storage is disabled; only small working previews are sent, and every draft
+requires admin approval before it can assign memories to a trip.
 
 The organizer prepares at most 50 unassigned memories per review so the admin
 can verify each proposed chapter without sending hundreds of previews in one AI
