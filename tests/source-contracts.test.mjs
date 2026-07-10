@@ -19,6 +19,7 @@ test("package scripts use the native Next.js runtime", () => {
   assert.equal(packageJson.scripts.build, "next build");
   assert.equal(packageJson.scripts.start, "next start");
   assert.match(packageJson.scripts.test, /tests\/source-contracts\.test\.mjs/);
+  assert.match(packageJson.scripts.test, /tests\/proxy-server-action\.test\.ts/);
   assert.match(packageJson.scripts["db:seed"], /db\/seed\.mjs/);
 
   for (const legacyPackage of [
@@ -77,6 +78,8 @@ test("Neon Auth is exposed through Next.js and protects application routes", () 
   assert.match(verificationForm, /emailOtp\.verifyEmail/);
   assert.match(proxy, /getAuth\(\)\.middleware/);
   assert.match(proxy, /loginUrl:\s*["']\/auth\/sign-in["']/);
+  assert.match(proxy, /request\.method\s*===\s*["']POST["']/);
+  assert.match(proxy, /request\.headers\.has\(["']next-action["']\)/);
   assert.match(proxy, /\/auth\/verify-email/);
   assert.match(proxy, /NextResponse\.next/);
 });
@@ -131,6 +134,11 @@ test("only Kyle can add adult or child accounts from family settings", () => {
   assert.match(accountPage, /isFamilyAccountManager\(/);
   assert.match(accessPanel, /data-testid=["']family-access-manager["']/);
   assert.match(accessPanel, /\/auth\/sign-up/);
+  assert.match(accessPanel, /try\s*{[\s\S]*await addFamilyMember/);
+  assert.match(
+    accessPanel,
+    /We couldn’t save that, but you’re still in Settings/,
+  );
   assert.doesNotMatch(accessPanel, /option\s+value=["']owner["']/);
 });
 

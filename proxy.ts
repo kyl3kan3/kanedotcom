@@ -15,6 +15,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
+  // Neon Auth 0.4.2 forwards the original POST method while checking its
+  // GET-only session endpoint. Let Next.js dispatch Server Actions directly;
+  // every action in this app performs its own server-side authorization.
+  if (request.method === "POST" && request.headers.has("next-action")) {
+    return NextResponse.next();
+  }
+
   // These route handlers perform their own owner/admin authorization and must
   // return JSON (or complete the OAuth callback) instead of an HTML login page.
   if (

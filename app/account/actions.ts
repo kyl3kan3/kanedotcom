@@ -29,7 +29,10 @@ export async function addFamilyMember(
   let context: Awaited<ReturnType<typeof requireFamilyAccountManager>>;
   try {
     context = await requireFamilyAccountManager();
-  } catch {
+  } catch (error) {
+    console.warn("[family-access] authorization denied", {
+      reason: error instanceof Error ? error.message : "unknown",
+    });
     return {
       status: "error",
       message: "Only Kyle’s verified owner account can add family members.",
@@ -56,8 +59,8 @@ export async function addFamilyMember(
     };
   }
 
-  const db = getDb();
   try {
+    const db = getDb();
     const [savedMember] = await db
       .insert(familyMembers)
       .values({
@@ -96,6 +99,10 @@ export async function addFamilyMember(
 
     revalidatePath("/account/settings");
     revalidatePath("/");
+    console.info("[family-access] member access saved", {
+      role,
+      joined: Boolean(savedMember.authUserId),
+    });
     return {
       status: "success",
       message: savedMember.authUserId
@@ -103,7 +110,11 @@ export async function addFamilyMember(
         : `${displayName} is ready to join. Use the Share invite button below.`,
       invitedEmail: email,
     };
-  } catch {
+  } catch (error) {
+    console.error("[family-access] member save failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : "Unknown failure",
+    });
     return {
       status: "error",
       message: "The invite could not be saved right now. Please try again.",

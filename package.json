@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --test tests/source-contracts.test.mjs && node --import tsx --test tests/family-holidays.test.ts",
+    "test": "npm run build && node --test tests/source-contracts.test.mjs && node --import tsx --test tests/family-holidays.test.ts tests/proxy-server-action.test.ts",
     "lint": "eslint . --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

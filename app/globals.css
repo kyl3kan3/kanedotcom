@@ -2567,6 +2567,20 @@ video {
   font-size: 12px;
 }
 
+.account-error-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.account-error-actions .primary-button {
+  min-height: 44px;
+  border: 0;
+  cursor: pointer;
+}
+
 .family-access-panel {
   margin-top: 30px;
   padding: clamp(24px, 5vw, 38px);
@@ -2855,6 +2869,8 @@ video {
 }
 
 @media (max-width: 640px) {
+  .account-error-actions { align-items: stretch; flex-direction: column; }
+  .account-error-actions .primary-button { width: 100%; }
   .family-access-panel { padding: 24px 18px; border-radius: 14px; }
   .family-access-heading { flex-direction: column; }
   .family-access-lock { order: -1; }

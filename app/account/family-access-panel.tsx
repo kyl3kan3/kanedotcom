@@ -19,6 +19,21 @@ const initialInviteState: FamilyInviteState = {
   message: "",
 };
 
+async function submitFamilyMember(
+  previousState: FamilyInviteState,
+  formData: FormData,
+) {
+  try {
+    return await addFamilyMember(previousState, formData);
+  } catch {
+    return {
+      status: "error" as const,
+      message:
+        "We couldn’t save that, but you’re still in Settings. Please try again.",
+    };
+  }
+}
+
 function roleLabel(role: ManagedFamilyMember["role"]) {
   if (role === "owner") return "Owner";
   if (role === "child") return "Child";
@@ -32,7 +47,7 @@ export function FamilyAccessPanel({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [inviteState, formAction, isPending] = useActionState(
-    addFamilyMember,
+    submitFamilyMember,
     initialInviteState,
   );
   const [copiedMemberId, setCopiedMemberId] = useState<string | null>(null);
