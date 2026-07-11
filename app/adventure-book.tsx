@@ -338,6 +338,7 @@ export default function AdventureBook({
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mobileNavRef = useRef<HTMLDetailsElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
   const galleryDialogRef = useRef<HTMLDivElement>(null);
   const galleryCloseRef = useRef<HTMLButtonElement>(null);
@@ -603,6 +604,10 @@ export default function AdventureBook({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [gallery, importOpen, organizerOpen]);
+
+  const closeMobileNav = () => {
+    mobileNavRef.current?.removeAttribute("open");
+  };
 
   const selectTrip = (tripId: string) => {
     setActiveTripId(tripId);
@@ -1256,19 +1261,46 @@ export default function AdventureBook({
         </a>
         <nav className="desktop-nav" aria-label="Main navigation">
           <a href="#adventure-map">Trip map</a>
-          <a href="#featured-trip">Stories</a>
+          {activeTrip && <a href="#featured-trip">Stories</a>}
           {importedMedia.length > 0 && <a href="#memory-shelf">Memory shelf</a>}
-          <a href="#challenge">Memory game</a>
+          {activeTrip && activeTrip.memories.length > 0 && (
+            <a href="#challenge">Memory game</a>
+          )}
         </nav>
         <div className="topbar-actions">
           <span className="sync-status" aria-live="polite">● {syncMessage}</span>
-          <Link className="account-pill" href="/account/settings" title="Open family account settings">
+          <Link
+            className="account-pill"
+            href="/account/settings"
+            aria-label={`Open family account settings for ${memberName}`}
+            title="Open family account settings"
+          >
             <span aria-hidden="true">{memberName.charAt(0).toUpperCase()}</span>
             <b>{memberName}<small>{memberRole}</small></b>
           </Link>
           <button className="add-memory-button" onClick={() => setImportOpen(true)}>
             <span aria-hidden="true">＋</span> Add memories
           </button>
+          <details className="mobile-nav" ref={mobileNavRef}>
+            <summary aria-label="Open the section menu">
+              <span aria-hidden="true">☰</span>
+            </summary>
+            <nav className="mobile-nav-panel" aria-label="Sections">
+              <a href="#adventure-map" onClick={closeMobileNav}>Trip map</a>
+              {activeTrip && (
+                <a href="#featured-trip" onClick={closeMobileNav}>Stories</a>
+              )}
+              {importedMedia.length > 0 && (
+                <a href="#memory-shelf" onClick={closeMobileNav}>Memory shelf</a>
+              )}
+              {activeTrip && activeTrip.memories.length > 0 && (
+                <a href="#challenge" onClick={closeMobileNav}>Memory game</a>
+              )}
+              <Link href="/account/settings" onClick={closeMobileNav}>
+                Account settings
+              </Link>
+            </nav>
+          </details>
         </div>
       </header>
 
@@ -1399,6 +1431,7 @@ export default function AdventureBook({
                     src={media.url}
                     aria-label="Private family video"
                     controls
+                    playsInline
                     preload="metadata"
                   />
                 </figure>
@@ -1471,6 +1504,7 @@ export default function AdventureBook({
                           src={memory.url}
                           aria-label={`Family video from ${trip.title}`}
                           controls
+                          playsInline
                           preload="metadata"
                         />
                       )}
@@ -2014,7 +2048,7 @@ export default function AdventureBook({
                       {importedMedia.slice(0, 60).map((media) => media.kind === "image" ? (
                         <figure key={media.id}><img src={media.url} alt="Imported family memory" loading="lazy" /></figure>
                       ) : (
-                        <figure key={media.id}><video src={media.url} aria-label="Imported family video" controls preload="metadata" /></figure>
+                        <figure key={media.id}><video src={media.url} aria-label="Imported family video" controls playsInline preload="metadata" /></figure>
                       ))}
                     </div>
                     {importedMedia.length > 60 && (
