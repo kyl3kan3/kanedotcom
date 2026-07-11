@@ -94,11 +94,10 @@ body::before {
   z-index: 100;
   pointer-events: none;
   content: "";
-  opacity: 0.28;
+  opacity: 0.3;
   background-image:
     repeating-radial-gradient(circle at 0 0, transparent 0, color-mix(in srgb, var(--ink) 3.5%, transparent) 1px, transparent 1.5px, transparent 4px);
   background-size: 6px 6px;
-  mix-blend-mode: multiply;
 }
 
 button,
@@ -289,15 +288,17 @@ video {
   position: absolute;
   bottom: -7px;
   left: 0;
-  width: 0;
+  width: 100%;
   height: 2px;
   content: "";
   background: var(--coral);
-  transition: width 180ms ease;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 180ms ease;
 }
 
 .desktop-nav a:hover::after {
-  width: 100%;
+  transform: scaleX(1);
 }
 
 .add-memory-button {
@@ -2012,7 +2013,7 @@ video {
   padding: 24px;
   overflow-y: auto;
   background: rgba(8, 24, 41, 0.78);
-  backdrop-filter: blur(9px);
+  backdrop-filter: blur(5px);
   animation: fade-in 180ms ease both;
 }
 
@@ -2049,6 +2050,7 @@ video {
 .lightbox-stage {
   position: relative;
   display: grid;
+  min-height: min(62vh, 640px);
   place-items: center;
   overflow: hidden;
   background: var(--ink);
@@ -3832,6 +3834,8 @@ video {
 
   .dialog-backdrop {
     padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(8, 24, 41, 0.88);
+    backdrop-filter: none;
   }
   .import-dialog { max-height: calc(100dvh - 20px); padding: 55px 22px 30px; }
   .import-options { grid-template-columns: 1fr; }
@@ -3863,6 +3867,7 @@ video {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
   }
 }
 

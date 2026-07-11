@@ -11,6 +11,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { preload } from "react-dom";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { NEXT_ADVENTURE_OPTIONS } from "@/lib/next-adventure";
 import {
@@ -135,6 +136,10 @@ function formatDuration(durationMs: number | null) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+function memoryImageUrl(url: string, width: number) {
+  return url.startsWith("/api/") ? `${url}?w=${width}` : url;
 }
 
 function familyMemoryAlt(chapterTitle?: string) {
@@ -463,7 +468,7 @@ export default function AdventureBook({
     const images = sources.filter((source) => source.kind === "image");
     const items = images.map((source, imageIndex) => ({
       id: source.id,
-      src: source.url,
+      src: memoryImageUrl(source.url, 1600),
       alt: `${
         label === "Our family memory shelf"
           ? familyMemoryAlt()
@@ -521,6 +526,15 @@ export default function AdventureBook({
       googlePollActiveSessionRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!gallery || gallery.items.length < 2) return;
+    const total = gallery.items.length;
+    const next = gallery.items[(gallery.index + 1) % total];
+    const previous = gallery.items[(gallery.index - 1 + total) % total];
+    preload(next.src, { as: "image" });
+    preload(previous.src, { as: "image" });
+  }, [gallery]);
 
   useEffect(() => {
     if (!galleryIsOpen) return;
@@ -1458,7 +1472,7 @@ export default function AdventureBook({
                 className={`fan-photo ${["fan-one", "fan-two", "fan-three"][index]}`}
                 key={photo.id}
               >
-                <img src={photo.url} alt={familyMemoryAlt(photo.chapterTitle)} />
+                <img src={memoryImageUrl(photo.url, 480)} alt={familyMemoryAlt(photo.chapterTitle)} />
                 <figcaption>{shortenTitle(photo.chapterTitle, 19).toUpperCase()}</figcaption>
               </figure>
             ))}
@@ -1537,7 +1551,7 @@ export default function AdventureBook({
                     }
                     aria-label={`Open photo ${shelfPhotos.findIndex((photo) => photo.id === media.id) + 1} of ${shelfPhotos.length} from the family memory shelf`}
                   >
-                    <img src={media.url} alt="" loading="lazy" />
+                    <img src={memoryImageUrl(media.url, 640)} alt="" loading="lazy" />
                     <span className="photo-open-badge" aria-hidden="true">
                       ↗
                     </span>
@@ -1609,7 +1623,7 @@ export default function AdventureBook({
                           aria-label={`Open photo ${trip.photos.findIndex((photo) => photo.id === memory.id) + 1} of ${trip.photos.length} from ${trip.title}`}
                         >
                           <img
-                            src={memory.url}
+                            src={memoryImageUrl(memory.url, 320)}
                             alt=""
                             loading="lazy"
                           />
@@ -1674,7 +1688,7 @@ export default function AdventureBook({
                     >
                       <span className="memory-stop-number">STOP {String(index + 1).padStart(2, "0")}</span>
                       {cover ? (
-                        <img className="memory-stop-cover" src={cover.url} alt="" />
+                        <img className="memory-stop-cover" src={memoryImageUrl(cover.url, 160)} alt="" />
                       ) : (
                         <span className="memory-stop-cover memory-stop-placeholder" aria-hidden="true">{trip.icon}</span>
                       )}
@@ -1741,6 +1755,9 @@ export default function AdventureBook({
                       const relative =
                         (index - photoIndex + activeTrip.photos.length) %
                         activeTrip.photos.length;
+                      // Mount only the visible three plus the next one (as a
+                      // preload); the rest of the trip stays undownloaded.
+                      if (relative > 3) return null;
                       const positionClass =
                         relative <= 2
                           ? `stack-position-${relative}`
@@ -1767,7 +1784,7 @@ export default function AdventureBook({
                           tabIndex={relative === 0 ? 0 : -1}
                         >
                           <img
-                            src={photo.url}
+                            src={memoryImageUrl(photo.url, 960)}
                             alt={
                               relative === 0
                                 ? familyMemoryAlt(activeTrip.title)
@@ -2190,7 +2207,7 @@ export default function AdventureBook({
                     )}
                     <div className="import-grid">
                       {importedMedia.slice(0, 60).map((media) => media.kind === "image" ? (
-                        <figure key={media.id}><img src={media.url} alt="Imported family memory" loading="lazy" /></figure>
+                        <figure key={media.id}><img src={memoryImageUrl(media.url, 320)} alt="Imported family memory" loading="lazy" /></figure>
                       ) : (
                         <figure key={media.id}><video src={media.url} aria-label="Imported family video" controls playsInline preload="metadata" /></figure>
                       ))}
@@ -2416,7 +2433,7 @@ export default function AdventureBook({
                         <div className="trip-draft-collage" aria-hidden="true">
                           {draft.memories.slice(0, 3).map((memory) =>
                             memory.kind === "image" ? (
-                              <img key={memory.id} src={memory.url} alt="" loading="lazy" />
+                              <img key={memory.id} src={memoryImageUrl(memory.url, 160)} alt="" loading="lazy" />
                             ) : (
                               <span key={memory.id}>▶</span>
                             ),

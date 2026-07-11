@@ -8,8 +8,24 @@ import { getPrivateMemoryUrl } from "@/lib/memory-storage";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Ladder of render widths the client may request via ?w=. Requests are
+// clamped to the next size up so the cache stays small and predictable.
+const RESIZE_WIDTHS = [160, 320, 480, 640, 960, 1600];
+
+function resolveResizeWidth(rawWidth: string | null, mimeType: string | null) {
+  if (!rawWidth) return null;
+  if (!mimeType?.startsWith("image/") || mimeType === "image/gif") return null;
+  const requested = Number.parseInt(rawWidth, 10);
+  if (!Number.isFinite(requested) || requested <= 0) return null;
+  return (
+    RESIZE_WIDTHS.find((candidate) => candidate >= requested) ??
+    RESIZE_WIDTHS.at(-1) ??
+    null
+  );
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ memoryId: string }> },
 ) {
   const { user, member } = await getFamilyContext();
@@ -24,7 +40,7 @@ export async function GET(
 
   const db = getDb();
   const [memory] = await db
-    .select({ storageKey: memories.storageKey })
+    .select({ storageKey: memories.storageKey, mimeType: memories.mimeType })
     .from(memories)
     .where(
       and(
@@ -38,6 +54,34 @@ export async function GET(
 
   if (!memory?.storageKey) {
     return NextResponse.json({ error: "Memory not found." }, { status: 404 });
+  }
+
+  const resizeWidth = resolveResizeWidth(
+    new URL(request.url).searchParams.get("w"),
+    memory.mimeType,
+  );
+
+  if (resizeWidth) {
+    try {
+      const url = await getPrivateMemoryUrl(memory.storageKey);
+      const upstream = await fetch(url);
+      if (!upstream.ok) throw new Error("Upstream fetch failed");
+      const original = Buffer.from(await upstream.arrayBuffer());
+      const sharp = (await import("sharp")).default;
+      const resized = await sharp(original)
+        .rotate()
+        .resize({ width: resizeWidth, withoutEnlargement: true })
+        .webp({ quality: 78 })
+        .toBuffer();
+      return new NextResponse(new Uint8Array(resized), {
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "private, max-age=86400",
+        },
+      });
+    } catch {
+      // Fall through to the full-size redirect below.
+    }
   }
 
   try {
