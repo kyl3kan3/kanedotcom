@@ -932,6 +932,42 @@ video {
   line-height: 1.75;
 }
 
+.adventure-map-wrap {
+  position: relative;
+}
+
+.trail-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  color: var(--paper);
+  background: var(--ink);
+  border: 2px solid var(--paper-bright);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.125rem;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 30%, transparent);
+  transform: translateY(-50%);
+  transition: opacity 160ms ease;
+}
+
+.trail-nav.previous { left: 12px; }
+.trail-nav.next { right: 12px; }
+
+.trail-nav:hover {
+  background: #27486e;
+}
+
+.trail-nav:disabled {
+  opacity: 0.25;
+  cursor: default;
+  pointer-events: none;
+}
+
 .adventure-map {
   position: relative;
   min-height: 560px;

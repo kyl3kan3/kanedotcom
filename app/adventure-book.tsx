@@ -394,10 +394,15 @@ export default function AdventureBook({
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
   const [syncMessage, setSyncMessage] = useState("All changes saved");
   const [tickerPaused, setTickerPaused] = useState(false);
+  const [trailScroll, setTrailScroll] = useState({
+    canBack: false,
+    canForward: false,
+  });
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobileNavRef = useRef<HTMLDetailsElement>(null);
+  const adventureMapRef = useRef<HTMLDivElement>(null);
   const importDialogRef = useRef<HTMLDivElement>(null);
   const organizerDialogRef = useRef<HTMLDivElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -698,6 +703,40 @@ export default function AdventureBook({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   });
+
+  const updateTrailScroll = () => {
+    const map = adventureMapRef.current;
+    if (!map) return;
+    const maxScroll = map.scrollWidth - map.clientWidth;
+    setTrailScroll((current) => {
+      const next = {
+        canBack: map.scrollLeft > 4,
+        canForward: map.scrollLeft < maxScroll - 4,
+      };
+      return next.canBack === current.canBack &&
+        next.canForward === current.canForward
+        ? current
+        : next;
+    });
+  };
+
+  const scrollTrail = (direction: -1 | 1) => {
+    const map = adventureMapRef.current;
+    if (!map) return;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    map.scrollBy({
+      left: direction * Math.round(map.clientWidth * 0.7),
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  };
+
+  useEffect(() => {
+    updateTrailScroll();
+    window.addEventListener("resize", updateTrailScroll);
+    return () => window.removeEventListener("resize", updateTrailScroll);
+  }, [bookTrips.length]);
 
   const closeMobileNav = () => {
     mobileNavRef.current?.removeAttribute("open");
@@ -1670,7 +1709,12 @@ export default function AdventureBook({
           </p>
         </div>
 
-        <div className="adventure-map">
+        <div className="adventure-map-wrap">
+        <div
+          className="adventure-map"
+          ref={adventureMapRef}
+          onScroll={updateTrailScroll}
+        >
           <span className="map-word word-west" aria-hidden="true">THEN</span>
           <span className="map-word word-home" aria-hidden="true">NOW</span>
           {bookTrips.length > 0 ? (
@@ -1713,6 +1757,29 @@ export default function AdventureBook({
               </button>
             </div>
           )}
+        </div>
+        {bookTrips.length > 0 && (trailScroll.canBack || trailScroll.canForward) && (
+          <>
+            <button
+              type="button"
+              className="trail-nav previous"
+              onClick={() => scrollTrail(-1)}
+              disabled={!trailScroll.canBack}
+              aria-label="Show earlier stops on the memory trail"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <button
+              type="button"
+              className="trail-nav next"
+              onClick={() => scrollTrail(1)}
+              disabled={!trailScroll.canForward}
+              aria-label="Show later stops on the memory trail"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </>
+        )}
         </div>
       </section>
 
