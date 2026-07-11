@@ -1,5 +1,22 @@
 import { AuthView } from "@neondatabase/auth/react/ui";
+import type { Metadata } from "next";
 import Link from "next/link";
+
+const AUTH_TITLES: Record<string, string> = {
+  "sign-in": "Sign in",
+  "sign-up": "Join the family",
+  "forgot-password": "Reset your password",
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ path: string }>;
+}): Promise<Metadata> {
+  const { path } = await params;
+  const title = AUTH_TITLES[path] ?? "Family entrance";
+  return { title: `${title} · Family Adventure Book` };
+}
 
 export default async function AuthPage({
   params,

@@ -8,6 +8,10 @@ import { FamilyAccessPanel } from "../family-access-panel";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Family settings · Family Adventure Book",
+};
+
 export default async function AccountPage({
   params,
 }: {

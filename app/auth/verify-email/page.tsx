@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { EmailVerificationForm } from "./verification-form";
+
+export const metadata: Metadata = {
+  title: "Verify your email · Family Adventure Book",
+};
 
 export default function VerifyEmailPage() {
   return (

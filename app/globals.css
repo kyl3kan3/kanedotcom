@@ -20,6 +20,10 @@
   /* Text/fill-safe green: sync status, success notes. */
   --green-deep: #31715a;
   --teal: #1f7a6f;
+  --coral-soft: #ffe1d9;
+  --yellow-soft: #fff0bd;
+  --green-soft: #dceee2;
+  --blue-soft: #dceafb;
   --mist: #ddf3f5;
   --lavender: #dccff6;
   --brown: #8b6f5a;
@@ -1182,7 +1186,7 @@ video {
 }
 .featured-trip {
   --trip-accent: var(--coral);
-  --trip-soft: #ffe1d9;
+  --trip-soft: var(--coral-soft);
   position: relative;
   padding: 126px max(32px, calc((100vw - 1280px) / 2)) 145px;
   color: #fff9ea;
@@ -3661,16 +3665,6 @@ video {
 .organizer-working ul { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 640px) {
-  .memory-shelf-actions { align-items: stretch; flex-direction: column; }
-  .ai-organize-button { justify-content: center; }
-  .generated-trip-media { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .organizer-dialog { width: 100%; max-height: calc(100dvh - 20px); padding: 28px 18px 22px; }
-  .organizer-heading { padding-right: 36px; }
-  .organizer-review-actions { align-items: stretch; flex-direction: column-reverse; }
-  .organizer-review-actions .primary-button { width: 100%; }
-}
-
 @media (max-width: 1120px) {
   .sync-status {
     position: fixed;
@@ -3753,6 +3747,14 @@ video {
   textarea {
     font-size: 1rem;
   }
+
+  .memory-shelf-actions { align-items: stretch; flex-direction: column; }
+  .ai-organize-button { justify-content: center; }
+  .generated-trip-media { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .organizer-dialog { width: 100%; max-height: calc(100dvh - 20px); padding: 28px 18px 22px; }
+  .organizer-heading { padding-right: 36px; }
+  .organizer-review-actions { align-items: stretch; flex-direction: column-reverse; }
+  .organizer-review-actions .primary-button { width: 100%; }
 
   .topbar { height: 82px; }
   .brand { font-size: 1rem; }
@@ -3858,6 +3860,57 @@ video {
 @media (max-width: 420px) {
   .suitcase-scene { margin-bottom: -110px; transform: scale(0.46); }
   .hero h1 { font-size: clamp(2.75rem, 14vw, 3.4375rem); }
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+
+  body::before,
+  .topbar,
+  .ticker,
+  .skip-link,
+  .sync-status,
+  .dialog-backdrop,
+  .photo-controls,
+  .hero-actions,
+  .hero-note,
+  .suitcase-scene,
+  .challenge-section,
+  .next-adventure,
+  .site-footer,
+  .memory-shelf-actions,
+  .surprise-chapter-button,
+  .open-chapter-button {
+    display: none !important;
+  }
+
+  .hero {
+    min-height: auto;
+    padding: 40px 0;
+  }
+
+  .featured-trip,
+  .featured-trip h2,
+  .featured-trip p,
+  .trip-intro-story,
+  .chapter-kicker,
+  .chapter-facts {
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .featured-trip {
+    padding: 24px 0;
+  }
+
+  img,
+  video {
+    break-inside: avoid;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

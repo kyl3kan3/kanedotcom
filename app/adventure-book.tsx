@@ -175,11 +175,13 @@ function crewPresentation(member: FamilyCrewMember, index: number) {
   };
 }
 
+// Accent values resolve against the palette tokens in globals.css so the
+// brand colors live in exactly one place.
 const tripThemes = [
-  { accent: "#ef6a5b", accentSoft: "#ffe1d9", icon: "✦" },
-  { accent: "#ffd166", accentSoft: "#fff0bd", icon: "☀" },
-  { accent: "#4faf83", accentSoft: "#dceee2", icon: "★" },
-  { accent: "#3a86ff", accentSoft: "#dceafb", icon: "➤" },
+  { accent: "var(--coral)", accentSoft: "var(--coral-soft)", icon: "✦" },
+  { accent: "var(--yellow)", accentSoft: "var(--yellow-soft)", icon: "☀" },
+  { accent: "var(--green)", accentSoft: "var(--green-soft)", icon: "★" },
+  { accent: "var(--blue)", accentSoft: "var(--blue-soft)", icon: "➤" },
 ] as const;
 
 type ImportedMedia = {
