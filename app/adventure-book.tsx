@@ -385,7 +385,7 @@ export default function AdventureBook({
     voteOptions.map((option) => initialVoteCounts[option.slug] ?? 0),
   );
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
-  const [syncMessage, setSyncMessage] = useState("Neon synced");
+  const [syncMessage, setSyncMessage] = useState("All changes saved");
   const [tickerPaused, setTickerPaused] = useState(false);
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
@@ -572,8 +572,8 @@ export default function AdventureBook({
         setGoogleStatus("unconfigured");
         setGoogleMessage(
           details.length > 0
-            ? `Setup needed in Vercel: ${details.join(", ")}`
-            : result.error ?? "Google Photos still needs its Google Cloud OAuth setup.",
+            ? `One-time admin setup still needed: ${details.join(", ")}`
+            : result.error ?? "Google Photos still needs its one-time admin setup.",
         );
       })
       .catch(() => {
@@ -601,7 +601,7 @@ export default function AdventureBook({
       } else if (googlePhotos === "setup") {
         setGoogleStatus("unconfigured");
         setGoogleMessage(
-          "Google Photos needs a Web OAuth client and callback URL configured in Vercel.",
+          "Google Photos still needs its one-time admin setup before the picker can open.",
         );
       } else {
         setGoogleStatus("error");
@@ -615,6 +615,16 @@ export default function AdventureBook({
       `${window.location.pathname}${window.location.hash}`,
     );
   }, []);
+
+  const closeOrganizer = () => {
+    if (organizerState === "review" && tripDrafts.length > 0) {
+      const confirmed = window.confirm(
+        "Close the organizer? The drafts stay saved, but your approve/skip choices will reset.",
+      );
+      if (!confirmed) return;
+    }
+    setOrganizerOpen(false);
+  };
 
   useEffect(() => {
     if (!gallery && !importOpen && !organizerOpen) return;
@@ -666,12 +676,12 @@ export default function AdventureBook({
           return;
         }
         setImportOpen(false);
-        setOrganizerOpen(false);
+        if (organizerOpen) closeOrganizer();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [gallery, importOpen, organizerOpen]);
+  });
 
   const closeMobileNav = () => {
     mobileNavRef.current?.removeAttribute("open");
@@ -741,7 +751,7 @@ export default function AdventureBook({
           Array.from(new Set([...current, activeTrip.id])),
         );
       }
-      setSyncMessage("Memory stamp saved to Neon");
+      setSyncMessage("Memory stamp saved");
     } catch {
       setSyncMessage("Could not sync this stamp — please try again");
     }
@@ -1117,7 +1127,7 @@ export default function AdventureBook({
         if (result.nextPageToken) {
           setGoogleStatus("importing");
           setGoogleMessage(
-            `Selected Google media is streaming server-to-server into private permanent copies... ${accumulatedProgress.processed} processed, ${accumulatedProgress.imported.length} ready for the book${accumulatedProgress.skipped > 0 ? `, ${accumulatedProgress.skipped} skipped` : ""}.`,
+            `Copying your Google Photos picks into the family book... ${accumulatedProgress.processed} processed, ${accumulatedProgress.imported.length} ready for the book${accumulatedProgress.skipped > 0 ? `, ${accumulatedProgress.skipped} skipped` : ""}.`,
           );
           setGoogleProgress({
             processed: accumulatedProgress.processed,
@@ -1234,7 +1244,7 @@ export default function AdventureBook({
       }
 
       setGoogleStatus("picking");
-      setGoogleMessage("Google Photos opened in a new tab. Pick up to 500 memories; selected media will stream server-to-server into private permanent copies.");
+      setGoogleMessage("Google Photos opened in a new tab. Pick up to 500 memories; each one becomes a private, permanent copy in the family book.");
       if (pickerWindow && !pickerWindow.closed) {
         pickerWindow.location.href = result.pickerUri;
         googlePollExpiryTimerRef.current = null;
@@ -1291,7 +1301,7 @@ export default function AdventureBook({
         media.map(({ name, mimeType, kind }) => ({ name, mimeType, kind })),
       );
       setSavedMetadataCount((current) => current + result.saved);
-      setSyncMessage(`${result.saved} memor${result.saved === 1 ? "y" : "ies"} recorded in Neon`);
+      setSyncMessage(`${result.saved} memor${result.saved === 1 ? "y" : "ies"} recorded for the family`);
     } catch {
       setSyncMessage("Previews are ready, but their details did not sync");
     }
@@ -1322,7 +1332,7 @@ export default function AdventureBook({
           (option) => result.counts[option.slug] ?? 0,
         ),
       );
-      setSyncMessage("Your vote is saved in Neon");
+      setSyncMessage("Your vote is saved");
     } catch {
       setCurrentVote(previousVote);
       setVotes(previousVotes);
@@ -1507,7 +1517,7 @@ export default function AdventureBook({
                   setImportOpen(true);
                 }}
               >
-                Open all memories <span aria-hidden="true">→</span>
+                Add more memories <span aria-hidden="true">→</span>
               </button>
             </div>
           </div>
@@ -1831,23 +1841,27 @@ export default function AdventureBook({
                   <small>VIDEOS</small>
                 </div>
               </div>
-              {activeTrip.videos[0] && (
+              {activeTrip.videos.length > 0 && (
                 <div className="video-postcard">
-                  <div className="video-label"><span>▶</span> REAL MOVING MEMORY</div>
-                  <video
-                    key={activeTrip.videos[0].id}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    poster={activeTrip.photos[0]?.url}
-                    aria-label={`${activeTrip.title} video memory`}
-                    src={activeTrip.videos[0].url}
-                  >
-                    Your browser does not support this family video.
-                  </video>
-                  <p>
-                    <span>{formatDuration(activeTrip.videos[0].durationMs)}</span>
-                  </p>
+                  <div className="video-label">
+                    <span>▶</span> REAL MOVING {activeTrip.videos.length === 1 ? "MEMORY" : "MEMORIES"}
+                  </div>
+                  {activeTrip.videos.map((video, videoIndex) => (
+                    <div className="video-postcard-item" key={video.id}>
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        aria-label={`${activeTrip.title} video memory ${videoIndex + 1} of ${activeTrip.videos.length}`}
+                        src={video.url}
+                      >
+                        Your browser does not support this family video.
+                      </video>
+                      <p>
+                        <span>{formatDuration(video.durationMs)}</span>
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1926,7 +1940,7 @@ export default function AdventureBook({
           </div>
           <p>
             These badges belong to the active people in your private family
-            book. Their memory and passport totals come straight from Neon.
+            book. Their memory and passport totals come straight from the family archive.
           </p>
         </div>
         <div className="guide-grid">
@@ -2116,7 +2130,7 @@ export default function AdventureBook({
             <button className="dialog-close" onClick={() => setImportOpen(false)} aria-label="Close memory importer">×</button>
             <span className="handwritten-label">make it yours</span>
             <h2 id="import-title">Add family memories</h2>
-            <p className="import-lede">Choose photos and videos from the device in your hand, or let selected Google Photos media stream server-to-server into private permanent copies. {savedMetadataCount} selections are already recorded for this family.</p>
+            <p className="import-lede">Choose photos and videos from the device in your hand, or bring in Google Photos picks as private, permanent copies. {savedMetadataCount} selections are already recorded for this family.</p>
 
             {importView === "choose" ? (
               <>
@@ -2185,7 +2199,7 @@ export default function AdventureBook({
                       <p><b>{importedMedia.length - 60} more memories</b> are safely stored in the family book.</p>
                     )}
                     <p>This shelf keeps things quick by showing up to 60 previews at a time; the full saved count stays on the book cover.</p>
-                    <p>Selected Google Photos media streams server-to-server into private Vercel Blob storage and reloads with the book. Device-only previews remain in this browser session.</p>
+                    <p>Google Photos picks are copied straight into the family&rsquo;s private storage — they never pass through this browser. Device-only previews remain in this browser session.</p>
                   </div>
                 )}
               </>
@@ -2225,9 +2239,9 @@ export default function AdventureBook({
                   </div>
                 )}
                 <ol>
-                  <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
+                  <li><span>1</span><div><b>Admin connects Google</b><small>Google asks only for photo-picking permission — nothing else.</small></div></li>
                   <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 500 at a time. The secure picker closes when selection is done.</small></div></li>
-                  <li><span>3</span><div><b>Selected items join the book</b><small>Selected media streams server-to-server into private permanent Vercel Blob copies; Neon keeps the family records.</small></div></li>
+                  <li><span>3</span><div><b>Selected items join the book</b><small>Selected items are copied into the family&rsquo;s private storage and recorded in the book.</small></div></li>
                 </ol>
                 {isAdmin ? (
                   <div className="google-picker-actions">
@@ -2294,7 +2308,7 @@ export default function AdventureBook({
         <div
           className="dialog-backdrop organizer-backdrop"
           role="presentation"
-          onMouseDown={() => setOrganizerOpen(false)}
+          onMouseDown={closeOrganizer}
         >
           <div
             ref={organizerDialogRef}
@@ -2313,7 +2327,7 @@ export default function AdventureBook({
           >
             <button
               className="dialog-close"
-              onClick={() => setOrganizerOpen(false)}
+              onClick={closeOrganizer}
               aria-label="Close AI memory organizer"
             >
               ×
@@ -2352,7 +2366,7 @@ export default function AdventureBook({
                   </li>
                   <li>
                     <span aria-hidden="true">✓</span>
-                    <div><b>Compare small previews</b><small>512px working images, never public Blob links</small></div>
+                    <div><b>Compare small previews</b><small>Small working images only — never public links</small></div>
                   </li>
                   <li>
                     <span aria-hidden="true">✓</span>
@@ -2418,19 +2432,35 @@ export default function AdventureBook({
                         <MessageResponse className="trip-draft-summary">
                           {draft.summary}
                         </MessageResponse>
+                        <p className="draft-review-state">
+                          {approved
+                            ? "✓ Will be added to the book"
+                            : "Will be skipped this time"}
+                        </p>
                         <button
                           className="draft-review-button"
                           onClick={() => toggleDraftApproval(draft.id)}
                           aria-pressed={approved}
                         >
-                          {approved ? "✓ Approved for the book" : "Skipped — undo"}
+                          {approved ? "Skip this chapter" : "Approve this chapter"}
                         </button>
                       </article>
                     );
                   })}
                 </div>
                 <div className="organizer-review-actions">
-                  <button className="text-button" onClick={generateTripDrafts}>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Regenerating replaces these drafts and your approve/skip choices. Continue?",
+                        )
+                      ) {
+                        void generateTripDrafts();
+                      }
+                    }}
+                  >
                     Regenerate drafts
                   </button>
                   <button

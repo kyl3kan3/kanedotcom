@@ -1482,6 +1482,10 @@ video {
   letter-spacing: 0.12em;
 }
 
+.video-postcard-item + .video-postcard-item {
+  margin-top: 14px;
+}
+
 .video-postcard p {
   display: flex;
   justify-content: flex-end;
@@ -3599,6 +3603,13 @@ video {
 
 .trip-draft-title { font-size: clamp(1.5625rem, 3vw, 2.125rem); }
 .trip-draft-summary { font-size: 0.75rem; }
+
+.draft-review-state {
+  margin: 10px 0 0;
+  color: var(--muted-ink);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
 
 .draft-review-button {
   width: 100%;

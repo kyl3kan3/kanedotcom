@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import AdventureBook from "./adventure-book";
 import { signOutAction } from "./actions";
@@ -38,9 +39,9 @@ export default async function Home() {
           <p>
             {needsVerification ? (
               <>
-                The invitation for <b>{user.email}</b> is ready. Neon needs to
-                confirm you own this address before it can attach the family
-                profile. Follow the verification message, then sign in again.
+                The invitation for <b>{user.email}</b> is ready. We just need
+                to confirm you own this address before the family profile can
+                be attached. Enter the six-digit code from your email below.
               </>
             ) : (
               <>
@@ -51,9 +52,9 @@ export default async function Home() {
             )}
           </p>
           {needsVerification && (
-            <a className="access-verify-link" href="/auth/verify-email">
+            <Link className="access-verify-link" href="/auth/verify-email">
               Enter your six-digit verification code →
-            </a>
+            </Link>
           )}
           <form action={signOutAction}>
             <button type="submit">Use a different account</button>
