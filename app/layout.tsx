@@ -1,7 +1,32 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Caveat, Fraunces, Nunito_Sans } from "next/font/google";
 import { headers } from "next/headers";
 import { Providers } from "./providers";
 import "./globals.css";
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-fraunces",
+});
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-caveat",
+});
+
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800", "900"],
+  variable: "--font-nunito-sans",
+});
+
+export const viewport: Viewport = {
+  themeColor: "#fff7e8",
+  colorScheme: "light",
+  viewportFit: "cover",
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -54,7 +79,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${fraunces.variable} ${caveat.variable} ${nunitoSans.variable}`}
+      suppressHydrationWarning
+    >
       <body><Providers>{children}</Providers></body>
     </html>
   );
