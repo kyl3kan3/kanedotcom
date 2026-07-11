@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { NEXT_ADVENTURE_OPTIONS } from "@/lib/next-adventure";
 import {
@@ -326,6 +327,7 @@ export default function AdventureBook({
   familyCrew,
   savedMemoryCount,
 }: AdventureBookProps) {
+  const router = useRouter();
   const [activeTripId, setActiveTripId] = useState<string | null>(
     generatedTrips[0]?.id ?? null,
   );
@@ -368,6 +370,12 @@ export default function AdventureBook({
     "Connect your private Google Photos picker to choose memories.",
   );
   const [googlePickerUrl, setGooglePickerUrl] = useState<string | null>(null);
+  const [googleProgress, setGoogleProgress] = useState<{
+    processed: number;
+    ready: number;
+    failed: number;
+    skipped: number;
+  } | null>(null);
   const [pendingGoogleSession, setPendingGoogleSession] = useState<{
     id: string;
     pollAfterMs: number;
@@ -496,6 +504,10 @@ export default function AdventureBook({
   };
 
   const galleryIsOpen = Boolean(gallery);
+  const shelfPreviewCount = importedMedia.filter(
+    (media) => media.source === "device",
+  ).length;
+  const shelfSavedCount = importedMedia.length - shelfPreviewCount;
 
   useEffect(() => {
     return () => {
@@ -701,7 +713,11 @@ export default function AdventureBook({
         "(prefers-reduced-motion: reduce)",
       ).matches;
       document
-        .getElementById(bookTrips.length > 0 ? "adventure-map" : "memory-shelf")
+        .getElementById(
+          bookTrips.length === 0 && importedMedia.length > 0
+            ? "memory-shelf"
+            : "adventure-map",
+        )
         ?.scrollIntoView({
           behavior: reducedMotion ? "auto" : "smooth",
           block: "start",
@@ -838,7 +854,9 @@ export default function AdventureBook({
       setOrganizerMessage(
         `${result.created ?? approvedDraftIds.size} new trip chapter${(result.created ?? approvedDraftIds.size) === 1 ? " is" : "s are"} now in the family book.`,
       );
-      window.setTimeout(() => window.location.reload(), 1200);
+      setTripDrafts([]);
+      setOrganizerRunId(null);
+      router.refresh();
     } catch (error) {
       setOrganizerState("error");
       setOrganizerMessage(
@@ -850,6 +868,7 @@ export default function AdventureBook({
   };
 
   const stopGooglePhotosPolling = () => {
+    setGoogleProgress(null);
     if (googlePollTimerRef.current !== null) {
       window.clearTimeout(googlePollTimerRef.current);
     }
@@ -1100,6 +1119,12 @@ export default function AdventureBook({
           setGoogleMessage(
             `Selected Google media is streaming server-to-server into private permanent copies... ${accumulatedProgress.processed} processed, ${accumulatedProgress.imported.length} ready for the book${accumulatedProgress.skipped > 0 ? `, ${accumulatedProgress.skipped} skipped` : ""}.`,
           );
+          setGoogleProgress({
+            processed: accumulatedProgress.processed,
+            ready: accumulatedProgress.imported.length,
+            failed: accumulatedProgress.failed,
+            skipped: accumulatedProgress.skipped,
+          });
 
           if (googlePollExpiryTimerRef.current !== null) {
             window.clearTimeout(googlePollExpiryTimerRef.current);
@@ -1120,6 +1145,12 @@ export default function AdventureBook({
           setGoogleMessage(
             `Finishing the private import... ${accumulatedProgress.processed} selected memories processed.`,
           );
+          setGoogleProgress({
+            processed: accumulatedProgress.processed,
+            ready: accumulatedProgress.imported.length,
+            failed: accumulatedProgress.failed,
+            skipped: accumulatedProgress.skipped,
+          });
           finalized = await finalizeGooglePhotosSession(sessionId);
           if (googlePollActiveSessionRef.current !== sessionId) return;
         }
@@ -1143,8 +1174,6 @@ export default function AdventureBook({
             `${processed} Google Photos memor${processed === 1 ? "y was" : "ies were"} processed, with ${media.length} permanently available in the book.${failed > 0 ? ` ${failed} could not be copied; try those again.` : ""}${skipped > 0 ? ` ${skipped} unsupported ${skipped === 1 ? "item was" : "items were"} skipped.` : ""}${finalizeWarning}`,
           );
           setImportView("choose");
-          setImportOpen(false);
-          void generateTripDrafts();
         } else {
           setGoogleMessage(
             processed > 0
@@ -1453,7 +1482,12 @@ export default function AdventureBook({
               <span className="handwritten-label">fresh from the camera roll</span>
               <h2>Our family memory shelf</h2>
               <p>
-                {importedMedia.length} private memor{importedMedia.length === 1 ? "y" : "ies"} safely tucked into the family book.
+                {shelfSavedCount > 0
+                  ? `${shelfSavedCount} private memor${shelfSavedCount === 1 ? "y" : "ies"} safely tucked into the family book.`
+                  : ""}
+                {shelfPreviewCount > 0
+                  ? `${shelfSavedCount > 0 ? " " : ""}${shelfPreviewCount} device preview${shelfPreviewCount === 1 ? "" : "s"} — visible here until this page closes, not uploaded yet.`
+                  : ""}
               </p>
             </div>
             <div className="memory-shelf-actions">
@@ -1648,11 +1682,9 @@ export default function AdventureBook({
               <span aria-hidden="true">✦</span>
               <h3>The first stop is waiting for your family.</h3>
               <p>Add a few photos, then the admin can turn them into a real chapter.</p>
-              {isAdmin && (
-                <button className="primary-button" onClick={() => setImportOpen(true)}>
-                  Add the first memories <span aria-hidden="true">→</span>
-                </button>
-              )}
+              <button className="primary-button" onClick={() => setImportOpen(true)}>
+                Add the first memories <span aria-hidden="true">→</span>
+              </button>
             </div>
           )}
         </div>
@@ -2092,6 +2124,19 @@ export default function AdventureBook({
                   <div className="import-success" role="status">
                     <b>Memories unpacked!</b>
                     <span>{googleMessage}</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="ai-organize-button"
+                        onClick={() => {
+                          setImportOpen(false);
+                          void generateTripDrafts();
+                        }}
+                      >
+                        <span aria-hidden="true">✨</span> Organize these into
+                        chapters
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="import-options">
@@ -2122,7 +2167,13 @@ export default function AdventureBook({
                 />
                 {importedMedia.length > 0 && (
                   <div className="import-preview">
-                    <div><b>Your family memory shelf</b><button onClick={clearImportedMedia}>Hide previews</button></div>
+                    <div><b>Your family memory shelf</b><button onClick={clearImportedMedia} title="Imported memories stay saved in the book">Hide the shelf</button></div>
+                    {shelfPreviewCount > 0 && (
+                      <p className="import-preview-note">
+                        Device photos are previews for now — they stay on this
+                        device and are not uploaded yet.
+                      </p>
+                    )}
                     <div className="import-grid">
                       {importedMedia.slice(0, 60).map((media) => media.kind === "image" ? (
                         <figure key={media.id}><img src={media.url} alt="Imported family memory" loading="lazy" /></figure>
@@ -2146,6 +2197,33 @@ export default function AdventureBook({
                 <p role={googleStatus === "error" ? "alert" : "status"}>
                   {googleMessage}
                 </p>
+                {(googleStatus === "importing" || googleStatus === "polling") && (
+                  <div className="import-progress">
+                    <span className="import-progress-bar" aria-hidden="true"><i /></span>
+                    {googleProgress && (
+                      <small role="status">
+                        {googleProgress.processed} processed · {googleProgress.ready} ready
+                        {googleProgress.failed > 0 ? ` · ${googleProgress.failed} failed` : ""}
+                        {googleProgress.skipped > 0 ? ` · ${googleProgress.skipped} skipped` : ""}
+                      </small>
+                    )}
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        stopGooglePhotosPolling();
+                        googlePollActiveSessionRef.current = null;
+                        setGooglePickerUrl(null);
+                        setGoogleStatus("ready");
+                        setGoogleMessage(
+                          "Import paused. Everything copied so far is saved — start the picker again to bring in the rest.",
+                        );
+                      }}
+                    >
+                      Pause importing
+                    </button>
+                  </div>
+                )}
                 <ol>
                   <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
                   <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 500 at a time. The secure picker closes when selection is done.</small></div></li>
@@ -2262,20 +2340,25 @@ export default function AdventureBook({
               organizerState === "saving") && (
               <div className="organizer-working">
                 <div className="organizer-spark" aria-hidden="true">✦</div>
-                <ol>
-                  <li className={organizerState === "analyzing" ? "active" : ""}>
-                    <span>1</span>
+                <p className="organizer-working-note" role="status">
+                  {organizerState === "saving"
+                    ? "Creating the approved chapters..."
+                    : "Working — this usually takes under a minute. Here is what happens:"}
+                </p>
+                <ul>
+                  <li>
+                    <span aria-hidden="true">✓</span>
                     <div><b>Read safe metadata</b><small>Capture dates, known holidays, dimensions, and file details</small></div>
                   </li>
-                  <li className={organizerState === "analyzing" ? "active" : ""}>
-                    <span>2</span>
+                  <li>
+                    <span aria-hidden="true">✓</span>
                     <div><b>Compare small previews</b><small>512px working images, never public Blob links</small></div>
                   </li>
-                  <li className={organizerState === "saving" ? "active" : ""}>
-                    <span>3</span>
+                  <li>
+                    <span aria-hidden="true">✓</span>
                     <div><b>{organizerState === "saving" ? "Create approved chapters" : "Write review drafts"}</b><small>Nothing appears until the admin approves it</small></div>
                   </li>
-                </ol>
+                </ul>
               </div>
             )}
 

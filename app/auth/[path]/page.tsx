@@ -3,10 +3,13 @@ import Link from "next/link";
 
 export default async function AuthPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ path: string }>;
+  searchParams: Promise<{ verified?: string }>;
 }) {
   const { path } = await params;
+  const { verified } = await searchParams;
 
   return (
     <main className="auth-shell">
@@ -24,6 +27,12 @@ export default async function AuthPage({
           </p>
         </div>
         <div className="auth-view-wrap">
+          {path === "sign-in" && verified === "1" && (
+            <p className="auth-verified-note" role="status">
+              <span aria-hidden="true">✓</span> Your email is verified. Sign in
+              to open the family book.
+            </p>
+          )}
           <AuthView path={path} redirectTo="/" />
           {(path === "sign-in" || path === "sign-up") && (
             <p className="verification-link">

@@ -50,6 +50,11 @@ export default async function Home() {
               </>
             )}
           </p>
+          {needsVerification && (
+            <a className="access-verify-link" href="/auth/verify-email">
+              Enter your six-digit verification code →
+            </a>
+          )}
           <form action={signOutAction}>
             <button type="submit">Use a different account</button>
           </form>

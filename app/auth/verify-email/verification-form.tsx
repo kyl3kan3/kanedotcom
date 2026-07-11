@@ -9,6 +9,7 @@ export function EmailVerificationForm() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"error" | "success">("error");
   const [pending, setPending] = useState(false);
 
   async function verifyEmail(event: FormEvent<HTMLFormElement>) {
@@ -27,6 +28,7 @@ export function EmailVerificationForm() {
       router.replace(session.data?.user ? "/" : "/auth/sign-in?verified=1");
       router.refresh();
     } catch (error) {
+      setMessageTone("error");
       setMessage(
         error instanceof Error
           ? error.message
@@ -39,6 +41,7 @@ export function EmailVerificationForm() {
 
   async function resendCode() {
     if (!email.trim()) {
+      setMessageTone("error");
       setMessage("Enter the email address from your family invitation first.");
       return;
     }
@@ -51,8 +54,10 @@ export function EmailVerificationForm() {
         type: "email-verification",
       });
       if (result.error) throw new Error(result.error.message);
+      setMessageTone("success");
       setMessage("A fresh six-digit code is on its way. It expires in 15 minutes.");
     } catch (error) {
+      setMessageTone("error");
       setMessage(
         error instanceof Error
           ? error.message
@@ -98,7 +103,12 @@ export function EmailVerificationForm() {
       <button className="verification-resend" type="button" onClick={resendCode} disabled={pending}>
         Send a fresh code
       </button>
-      <p className="verification-message" aria-live="polite">{message}</p>
+      <p
+        className={`verification-message ${message ? `verification-message-${messageTone}` : ""}`}
+        aria-live="polite"
+      >
+        {message}
+      </p>
     </form>
   );
 }
