@@ -271,6 +271,49 @@ type AdventureBookProps = {
 
 const voteOptions = NEXT_ADVENTURE_OPTIONS;
 
+const DIALOG_FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function manageDialogFocus(dialog: HTMLElement | null) {
+  if (!dialog) return;
+
+  const previouslyFocused =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
+  const focusables = () =>
+    Array.from(dialog.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR));
+  window.requestAnimationFrame(() => {
+    focusables()[0]?.focus({ preventScroll: true });
+  });
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Tab") return;
+    const items = focusables();
+    const first = items[0];
+    const last = items.at(-1);
+    if (!first || !last) return;
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  document.addEventListener("keydown", onKeyDown);
+
+  return () => {
+    document.removeEventListener("keydown", onKeyDown);
+    document.body.style.overflow = previousOverflow;
+    previouslyFocused?.focus({ preventScroll: true });
+  };
+}
+
 export default function AdventureBook({
   memberName,
   memberRole,
@@ -335,10 +378,13 @@ export default function AdventureBook({
   );
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
   const [syncMessage, setSyncMessage] = useState("Neon synced");
+  const [tickerPaused, setTickerPaused] = useState(false);
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobileNavRef = useRef<HTMLDetailsElement>(null);
+  const importDialogRef = useRef<HTMLDivElement>(null);
+  const organizerDialogRef = useRef<HTMLDivElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
   const galleryDialogRef = useRef<HTMLDivElement>(null);
   const galleryCloseRef = useRef<HTMLButtonElement>(null);
@@ -406,16 +452,16 @@ export default function AdventureBook({
     selectedId: string,
     label: string,
   ) => {
-    const items = sources
-      .filter((source) => source.kind === "image")
-      .map((source) => ({
-        id: source.id,
-        src: source.url,
-        alt:
-          label === "Our family memory shelf"
-            ? familyMemoryAlt()
-            : familyMemoryAlt(label),
-      }));
+    const images = sources.filter((source) => source.kind === "image");
+    const items = images.map((source, imageIndex) => ({
+      id: source.id,
+      src: source.url,
+      alt: `${
+        label === "Our family memory shelf"
+          ? familyMemoryAlt()
+          : familyMemoryAlt(label)
+      } (photo ${imageIndex + 1} of ${images.length})`,
+    }));
     if (items.length === 0) return;
 
     const selectedIndex = items.findIndex((item) => item.id === selectedId);
@@ -475,6 +521,16 @@ export default function AdventureBook({
       document.body.style.overflow = previousOverflow;
     };
   }, [galleryIsOpen]);
+
+  useEffect(() => {
+    if (!importOpen) return;
+    return manageDialogFocus(importDialogRef.current);
+  }, [importOpen]);
+
+  useEffect(() => {
+    if (!organizerOpen) return;
+    return manageDialogFocus(organizerDialogRef.current);
+  }, [organizerOpen]);
 
   useEffect(() => {
     if (
@@ -1252,7 +1308,10 @@ export default function AdventureBook({
   };
 
   return (
-    <main className="site-shell">
+    <div className="site-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to the book
+      </a>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Our family adventure book home">
           <span className="brand-mark" aria-hidden="true">✦</span>
@@ -1304,6 +1363,7 @@ export default function AdventureBook({
         </div>
       </header>
 
+      <main id="main-content">
       <section className={`hero ${bookOpen ? "book-is-open" : ""}`} id="top">
         <div className="hero-copy">
           <div className="eyebrow">
@@ -1333,7 +1393,10 @@ export default function AdventureBook({
           </div>
         </div>
 
-        <div className="suitcase-scene" aria-label="A scrapbook collage of family adventures">
+        <div className="suitcase-scene">
+          <p className="visually-hidden">
+            A scrapbook collage of family adventures.
+          </p>
           <div className="sun-doodle" aria-hidden="true">☀</div>
           <div className="suitcase-lid">
             <span className="sticker sticker-one">
@@ -1365,11 +1428,22 @@ export default function AdventureBook({
         </div>
       </section>
 
-      <div className="ticker" aria-hidden="true">
-        <div>
+      <div className={`ticker ${tickerPaused ? "ticker-paused" : ""}`}>
+        <div aria-hidden="true">
           <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS
           <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS
         </div>
+        <button
+          type="button"
+          className="ticker-pause"
+          onClick={() => setTickerPaused((paused) => !paused)}
+          aria-pressed={tickerPaused}
+          aria-label={
+            tickerPaused ? "Resume the stats ticker" : "Pause the stats ticker"
+          }
+        >
+          <span aria-hidden="true">{tickerPaused ? "▶" : "❚❚"}</span>
+        </button>
       </div>
 
       {importedMedia.length > 0 && (
@@ -1704,7 +1778,11 @@ export default function AdventureBook({
             </div>
 
             <div className="chapter-side">
-              <div className="trip-stats" aria-label="Chapter media counts">
+              <div
+                className="trip-stats"
+                role="group"
+                aria-label="Chapter media counts"
+              >
                 <div>
                   <span aria-hidden="true">✦</span>
                   <b>{activeTrip.memories.length}</b>
@@ -1877,6 +1955,7 @@ export default function AdventureBook({
           ))}
         </div>
       </section>
+      </main>
 
       <footer className="site-footer">
         <div className="footer-plane" aria-hidden="true">➤</div>
@@ -2001,7 +2080,7 @@ export default function AdventureBook({
 
       {importOpen && (
         <div className="dialog-backdrop" role="presentation" onMouseDown={() => setImportOpen(false)}>
-          <div className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div ref={importDialogRef} className="import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-title" onMouseDown={(event) => event.stopPropagation()}>
             <button className="dialog-close" onClick={() => setImportOpen(false)} aria-label="Close memory importer">×</button>
             <span className="handwritten-label">make it yours</span>
             <h2 id="import-title">Add family memories</h2>
@@ -2064,7 +2143,9 @@ export default function AdventureBook({
                 <button className="back-button" onClick={() => setImportView("choose")}>← Back</button>
                 <div className="google-badge"><span /><span /><span /><span /></div>
                 <h3>{isAdmin ? "Pick from Google Photos" : "Admin Google Photos"}</h3>
-                <p>{googleMessage}</p>
+                <p role={googleStatus === "error" ? "alert" : "status"}>
+                  {googleMessage}
+                </p>
                 <ol>
                   <li><span>1</span><div><b>Admin connects Google</b><small>OAuth asks only for the Photos Picker permission.</small></div></li>
                   <li><span>2</span><div><b>Choose memories in Google Photos</b><small>Pick up to 500 at a time. The secure picker closes when selection is done.</small></div></li>
@@ -2138,6 +2219,7 @@ export default function AdventureBook({
           onMouseDown={() => setOrganizerOpen(false)}
         >
           <div
+            ref={organizerDialogRef}
             className="organizer-dialog"
             role="dialog"
             aria-modal="true"
@@ -2302,6 +2384,6 @@ export default function AdventureBook({
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

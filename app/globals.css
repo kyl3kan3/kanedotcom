@@ -148,6 +148,25 @@ video {
   max-width: 100%;
 }
 
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  padding: 12px 18px;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
 .site-shell {
   min-height: 100vh;
   min-height: 100dvh;
@@ -785,6 +804,28 @@ video {
   font-weight: 900;
   letter-spacing: 0.19em;
   animation: ticker 35s linear infinite;
+}
+
+.ticker-paused div {
+  animation-play-state: paused;
+}
+
+.ticker-pause {
+  position: absolute;
+  top: 50%;
+  right: 3%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.6875rem;
+  transform: translateY(-50%);
 }
 
 .ticker span {
