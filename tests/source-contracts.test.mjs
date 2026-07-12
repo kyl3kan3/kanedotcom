@@ -207,7 +207,12 @@ test("approved trips power the cover, memory trail, chapter reader, and game", (
   assert.match(client, /activeTrip\.videos/);
   assert.match(client, /familyCrew\.map/);
   assert.match(styles, /\.memory-trail\s*\{/);
-  assert.match(styles, /scroll-snap-type:\s*x\s+mandatory/);
+  assert.match(
+    styles,
+    /grid-template-columns:\s*repeat\(var\(--trail-cols/,
+    "the memory trail lays chapters out on a winding map grid, not a slider",
+  );
+  assert.match(client, /trail-seg-down/);
 
   assert.doesNotMatch(client, /images\.unsplash\.com|videos\.pexels\.com/);
   assert.doesNotMatch(client, /Yellowstone|Cloud factories|MEET PICKLES/);

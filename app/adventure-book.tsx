@@ -394,16 +394,11 @@ export default function AdventureBook({
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
   const [syncMessage, setSyncMessage] = useState("All changes saved");
   const [tickerPaused, setTickerPaused] = useState(false);
-  const [trailScroll, setTrailScroll] = useState({
-    canBack: false,
-    canForward: false,
-    progress: 0,
-  });
+  const [trailCols, setTrailCols] = useState(3);
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mobileNavRef = useRef<HTMLDetailsElement>(null);
-  const adventureMapRef = useRef<HTMLDivElement>(null);
   const importDialogRef = useRef<HTMLDivElement>(null);
   const organizerDialogRef = useRef<HTMLDivElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -705,51 +700,15 @@ export default function AdventureBook({
     return () => document.removeEventListener("keydown", onKeyDown);
   });
 
-  const updateTrailScroll = () => {
-    const map = adventureMapRef.current;
-    if (!map) return;
-    const maxScroll = map.scrollWidth - map.clientWidth;
-    setTrailScroll((current) => {
-      const next = {
-        canBack: map.scrollLeft > 4,
-        canForward: map.scrollLeft < maxScroll - 4,
-        progress:
-          maxScroll > 0
-            ? Math.round((map.scrollLeft / maxScroll) * 1000)
-            : 0,
-      };
-      return next.canBack === current.canBack &&
-        next.canForward === current.canForward &&
-        next.progress === current.progress
-        ? current
-        : next;
-    });
-  };
-
-  const scrubTrail = (value: number) => {
-    const map = adventureMapRef.current;
-    if (!map) return;
-    const maxScroll = map.scrollWidth - map.clientWidth;
-    map.scrollLeft = (value / 1000) * maxScroll;
-  };
-
-  const scrollTrail = (direction: -1 | 1) => {
-    const map = adventureMapRef.current;
-    if (!map) return;
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    map.scrollBy({
-      left: direction * Math.round(map.clientWidth * 0.7),
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-  };
-
   useEffect(() => {
-    updateTrailScroll();
-    window.addEventListener("resize", updateTrailScroll);
-    return () => window.removeEventListener("resize", updateTrailScroll);
-  }, [bookTrips.length]);
+    const computeTrailCols = () => {
+      const width = window.innerWidth;
+      setTrailCols(width <= 640 ? 1 : width <= 1120 ? 2 : 3);
+    };
+    computeTrailCols();
+    window.addEventListener("resize", computeTrailCols);
+    return () => window.removeEventListener("resize", computeTrailCols);
+  }, []);
 
   const closeMobileNav = () => {
     mobileNavRef.current?.removeAttribute("open");
@@ -1722,21 +1681,36 @@ export default function AdventureBook({
           </p>
         </div>
 
-        <div className="adventure-map-wrap">
-        <div
-          className="adventure-map"
-          ref={adventureMapRef}
-          onScroll={updateTrailScroll}
-        >
+        <div className="adventure-map">
           <span className="map-word word-west" aria-hidden="true">THEN</span>
           <span className="map-word word-home" aria-hidden="true">NOW</span>
           {bookTrips.length > 0 ? (
-            <ol className="memory-trail" aria-label="Published family chapters">
+            <ol
+              className="memory-trail"
+              style={{ "--trail-cols": trailCols } as CSSProperties}
+              aria-label="Published family chapters"
+            >
               {bookTrips.map((trip, index) => {
                 const cover = trip.photos[0];
                 const active = activeTrip?.id === trip.id;
+                const row = Math.floor(index / trailCols);
+                const columnInRow = index % trailCols;
+                const column =
+                  row % 2 === 0 ? columnInRow : trailCols - 1 - columnInRow;
+                const connector =
+                  index === bookTrips.length - 1
+                    ? ""
+                    : columnInRow === trailCols - 1
+                      ? "trail-seg-down"
+                      : row % 2 === 0
+                        ? "trail-seg-right"
+                        : "trail-seg-left";
                 return (
-                  <li className={index % 2 === 0 ? "trail-high" : "trail-low"} key={trip.id}>
+                  <li
+                    className={connector}
+                    style={{ gridRow: row + 1, gridColumn: column + 1 }}
+                    key={trip.id}
+                  >
                     <button
                       className={`memory-stop ${active ? "active" : ""}`}
                       style={{ "--pin-color": trip.accent } as CSSProperties}
@@ -1770,48 +1744,6 @@ export default function AdventureBook({
               </button>
             </div>
           )}
-        </div>
-        {bookTrips.length > 0 && (trailScroll.canBack || trailScroll.canForward) && (
-          <>
-            <button
-              type="button"
-              className="trail-nav previous"
-              onClick={() => scrollTrail(-1)}
-              disabled={!trailScroll.canBack}
-              aria-label="Show earlier stops on the memory trail"
-            >
-              <span aria-hidden="true">←</span>
-              <small aria-hidden="true">earlier</small>
-            </button>
-            <button
-              type="button"
-              className="trail-nav next"
-              onClick={() => scrollTrail(1)}
-              disabled={!trailScroll.canForward}
-              aria-label="Show later stops on the memory trail"
-            >
-              <span aria-hidden="true">→</span>
-              <small aria-hidden="true">later</small>
-            </button>
-            <div className="trail-scrubber-wrap">
-              <span className="trail-hint" aria-hidden="true">
-                slide along the trail
-              </span>
-              <input
-                type="range"
-                className="trail-scrubber"
-                min={0}
-                max={1000}
-                step={1}
-                value={trailScroll.progress}
-                onChange={(event) =>
-                  scrubTrail(Number(event.currentTarget.value))
-                }
-                aria-label="Slide along the memory trail timeline"
-              />
-            </div>
-          </>
-        )}
         </div>
       </section>
 

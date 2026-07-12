@@ -932,135 +932,9 @@ video {
   line-height: 1.75;
 }
 
-.adventure-map-wrap {
-  position: relative;
-}
-
-.trail-nav {
-  position: absolute;
-  top: 50%;
-  z-index: 3;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 1px;
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  color: var(--ink);
-  background: var(--paper-bright);
-  border: 2px solid var(--ink);
-  border-radius: 52% 48% 55% 45% / 48% 55% 45% 52%;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 800;
-  box-shadow:
-    0 6px 0 color-mix(in srgb, var(--ink) 24%, transparent),
-    0 16px 26px color-mix(in srgb, var(--ink) 16%, transparent);
-  transform: translateY(-50%) rotate(-5deg);
-  transition: opacity 160ms ease, transform 160ms ease, background-color 160ms ease;
-}
-
-.trail-nav small {
-  font-family: var(--font-script);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.trail-nav.previous { left: 14px; }
-
-.trail-nav.next {
-  right: 14px;
-  transform: translateY(-50%) rotate(4deg);
-}
-
-.trail-nav:hover {
-  background: var(--paper);
-  transform: translateY(calc(-50% - 3px)) rotate(-2deg);
-}
-
-.trail-nav.next:hover {
-  transform: translateY(calc(-50% - 3px)) rotate(2deg);
-}
-
-.trail-nav:disabled {
-  opacity: 0.22;
-  cursor: default;
-  pointer-events: none;
-}
-
-.trail-scrubber-wrap {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  z-index: 3;
-  display: grid;
-  justify-items: center;
-  gap: 0;
-  width: min(58%, 520px);
-  transform: translateX(-50%);
-}
-
-.trail-hint {
-  color: color-mix(in srgb, var(--ink) 62%, transparent);
-  font-family: var(--font-script);
-  font-size: 1.125rem;
-  font-weight: 700;
-  pointer-events: none;
-  transform: rotate(-2deg);
-}
-
-.trail-scrubber {
-  width: 100%;
-  height: 34px;
-  margin: 0;
-  appearance: none;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--ink) 55%, transparent) 0 9px,
-      transparent 9px 17px
-    )
-    center / 100% 3px no-repeat;
-  cursor: grab;
-}
-
-.trail-scrubber:active { cursor: grabbing; }
-
-.trail-scrubber::-webkit-slider-runnable-track {
-  height: 34px;
-  background: transparent;
-}
-
-.trail-scrubber::-moz-range-track {
-  height: 34px;
-  background: transparent;
-}
-
-.trail-scrubber::-webkit-slider-thumb {
-  width: 32px;
-  height: 32px;
-  appearance: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M18 2.6c9.4-.7 15.8 5.6 15.4 15s-5.6 16.3-15.4 15.8S2.2 27.4 2.6 17.6 8.6 3.3 18 2.6Z' fill='%23fffdf7' stroke='%23183153' stroke-width='2.4'/%3E%3Cpath d='M12.5 12.5l13 5.5-13 5.5 3.2-5.5z' fill='%23c0432f'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  filter: drop-shadow(0 4px 0 color-mix(in srgb, var(--ink) 24%, transparent));
-}
-
-.trail-scrubber::-moz-range-thumb {
-  width: 32px;
-  height: 32px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M18 2.6c9.4-.7 15.8 5.6 15.4 15s-5.6 16.3-15.4 15.8S2.2 27.4 2.6 17.6 8.6 3.3 18 2.6Z' fill='%23fffdf7' stroke='%23183153' stroke-width='2.4'/%3E%3Cpath d='M12.5 12.5l13 5.5-13 5.5 3.2-5.5z' fill='%23c0432f'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  border: 0;
-  filter: drop-shadow(0 4px 0 color-mix(in srgb, var(--ink) 24%, transparent));
-}
-
 .adventure-map {
   position: relative;
   min-height: 560px;
-  overflow-x: auto;
-  overflow-y: hidden;
   padding: 95px 30px 62px;
   background:
     radial-gradient(circle at 23% 35%, rgba(79, 175, 131, 0.2) 0 12%, transparent 12.3%),
@@ -1070,11 +944,7 @@ video {
   border: 2px solid var(--ink);
   border-radius: 41% 53% 45% 55% / 12% 11% 14% 13%;
   box-shadow: 14px 18px 0 color-mix(in srgb, var(--ink) 9%, transparent);
-  scroll-padding-inline: 40px;
-  scrollbar-width: none;
 }
-
-.adventure-map::-webkit-scrollbar { display: none; }
 
 .adventure-map::before {
   position: absolute;
@@ -1103,54 +973,53 @@ video {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(225px, 275px);
+  grid-template-columns: repeat(var(--trail-cols, 3), minmax(225px, 285px));
   justify-content: center;
   align-items: center;
-  gap: 34px;
-  width: max-content;
-  min-width: 100%;
-  height: 390px;
+  column-gap: 46px;
+  row-gap: 58px;
+  width: 100%;
   margin: 0;
-  padding: 0 38px;
+  padding: 6px 4px 26px;
   list-style: none;
-  scroll-snap-type: x mandatory;
 }
 
-.memory-trail::before {
-  position: absolute;
-  top: 50%;
-  right: 28px;
-  left: 28px;
-  z-index: -1;
-  content: "";
-  border-top: 4px dashed color-mix(in srgb, var(--ink) 30%, transparent);
-  transform: translateY(-50%);
-}
+.memory-trail > li { position: relative; }
 
-.memory-trail > li {
-  position: relative;
-  scroll-snap-align: center;
-}
+.memory-trail > li:nth-child(3n + 1) { transform: rotate(-1.2deg); }
+.memory-trail > li:nth-child(3n + 2) { transform: rotate(0.9deg); }
+.memory-trail > li:nth-child(3n) { transform: rotate(-0.5deg); }
 
 .memory-trail > li::after {
   position: absolute;
-  left: 50%;
-  width: 2px;
-  height: 42px;
+  z-index: -1;
   content: "";
-  background: repeating-linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--ink) 34%, transparent) 0 5px,
-    transparent 5px 10px
-  );
-  transform: translateX(-50%);
+  pointer-events: none;
 }
 
-.memory-trail > li.trail-high { transform: translateY(-58px); }
-.memory-trail > li.trail-low { transform: translateY(58px); }
-.memory-trail > li.trail-high::after { top: 100%; }
-.memory-trail > li.trail-low::after { bottom: 100%; }
+.trail-seg-right::after {
+  top: 50%;
+  left: 100%;
+  width: 46px;
+  border-top: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  transform: translateY(-50%);
+}
+
+.trail-seg-left::after {
+  top: 50%;
+  right: 100%;
+  width: 46px;
+  border-top: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  transform: translateY(-50%);
+}
+
+.trail-seg-down::after {
+  top: 100%;
+  left: 50%;
+  height: 58px;
+  border-left: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  transform: translateX(-50%);
+}
 
 .memory-stop {
   --pin-color: var(--coral-deep);
@@ -3836,7 +3705,6 @@ video {
   .map-section,
   .tour-guides { width: min(100% - 40px, 1280px); }
   .adventure-map { min-height: 590px; padding-inline: 20px; }
-  .memory-trail { grid-auto-columns: minmax(220px, 250px); gap: 28px; }
 
   .trip-intro { grid-template-columns: 120px 1fr; gap: 35px; }
   .passport-stamp { width: 112px; height: 112px; }
@@ -3904,20 +3772,11 @@ video {
   .memory-shelf-section { padding: 70px 20px 76px; }
   .memory-shelf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adventure-map { min-height: 560px; padding: 82px 10px 48px; border-radius: 28% 26% 23% 27% / 4% 5% 4% 4%; }
-  .trail-nav { width: 52px; height: 52px; }
-  .trail-nav small { font-size: 0.8125rem; }
-  .trail-nav.previous { left: 8px; }
-  .trail-nav.next { right: 8px; }
-  .trail-scrubber-wrap { bottom: 6px; width: min(74%, 420px); }
-  .trail-hint { font-size: 0.9375rem; }
   .memory-trail {
-    grid-auto-columns: 220px;
-    gap: 22px;
-    height: 390px;
-    padding-inline: 24px;
+    grid-template-columns: repeat(var(--trail-cols, 1), minmax(0, 1fr));
+    row-gap: 46px;
   }
-  .memory-trail > li.trail-high { transform: translateY(-43px); }
-  .memory-trail > li.trail-low { transform: translateY(43px); }
+  .trail-seg-down::after { height: 46px; }
   .memory-stop { min-height: 105px; grid-template-columns: 64px minmax(0, 1fr); }
   .memory-stop-cover { width: 64px; height: 64px; }
   .map-word { font-size: 3.9375rem; }
