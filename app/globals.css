@@ -973,53 +973,62 @@ video {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: repeat(var(--trail-cols, 3), minmax(225px, 285px));
+  grid-template-columns: repeat(2, minmax(200px, 300px));
   justify-content: center;
   align-items: center;
-  column-gap: 46px;
-  row-gap: 58px;
+  column-gap: 54px;
+  row-gap: 62px;
   width: 100%;
   margin: 0;
-  padding: 6px 4px 26px;
+  padding: 8px 6px 30px;
   list-style: none;
 }
 
-.memory-trail > li { position: relative; }
+.memory-trail > li {
+  position: relative;
+  justify-self: stretch;
+}
 
-.memory-trail > li:nth-child(3n + 1) { transform: rotate(-1.2deg); }
-.memory-trail > li:nth-child(3n + 2) { transform: rotate(0.9deg); }
-.memory-trail > li:nth-child(3n) { transform: rotate(-0.5deg); }
+.memory-trail > li:nth-child(4n + 1) { grid-column: 1; transform: rotate(-1.1deg); }
+.memory-trail > li:nth-child(4n + 2) { grid-column: 2; transform: rotate(0.8deg); }
+.memory-trail > li:nth-child(4n + 3) { grid-column: 2; transform: rotate(-0.6deg); }
+.memory-trail > li:nth-child(4n + 4) { grid-column: 1; transform: rotate(1deg); }
 
+/* Dashed path segments join each stop to the next in a winding trail. */
 .memory-trail > li::after {
   position: absolute;
   z-index: -1;
   content: "";
   pointer-events: none;
+  border-color: color-mix(in srgb, var(--ink) 34%, transparent);
 }
 
-.trail-seg-right::after {
+.memory-trail > li:nth-child(4n + 1)::after {
   top: 50%;
   left: 100%;
-  width: 46px;
-  border-top: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  width: 54px;
+  border-top: 4px dashed;
   transform: translateY(-50%);
 }
 
-.trail-seg-left::after {
+.memory-trail > li:nth-child(4n + 3)::after {
   top: 50%;
   right: 100%;
-  width: 46px;
-  border-top: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  width: 54px;
+  border-top: 4px dashed;
   transform: translateY(-50%);
 }
 
-.trail-seg-down::after {
+.memory-trail > li:nth-child(4n + 2)::after,
+.memory-trail > li:nth-child(4n + 4)::after {
   top: 100%;
   left: 50%;
-  height: 58px;
-  border-left: 4px dashed color-mix(in srgb, var(--ink) 34%, transparent);
+  height: 62px;
+  border-left: 4px dashed;
   transform: translateX(-50%);
 }
+
+.memory-trail > li:last-child::after { display: none; }
 
 .memory-stop {
   --pin-color: var(--coral-deep);
@@ -1325,19 +1334,24 @@ video {
 .photo-controls button {
   display: grid;
   place-items: center;
-  width: 45px;
-  height: 45px;
-  color: #fff;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  color: var(--ink);
+  background: var(--paper-bright);
+  border: 2px solid var(--ink);
+  border-radius: 54% 46% 55% 45% / 48% 55% 45% 52%;
   cursor: pointer;
-  transition: background-color 180ms ease, color 180ms ease;
+  font-size: 1.0625rem;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--ink) 45%, transparent);
+  transition: transform 160ms ease, background-color 160ms ease;
 }
 
+.photo-controls button:first-child { transform: rotate(-5deg); }
+.photo-controls button:last-child { transform: rotate(4deg); }
+
 .photo-controls button:hover {
-  color: var(--ink);
-  background: var(--trip-accent);
+  background: var(--trip-soft);
+  transform: translateY(-3px);
 }
 
 .photo-controls span {
@@ -3773,10 +3787,33 @@ video {
   .memory-shelf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adventure-map { min-height: 560px; padding: 82px 10px 48px; border-radius: 28% 26% 23% 27% / 4% 5% 4% 4%; }
   .memory-trail {
-    grid-template-columns: repeat(var(--trail-cols, 1), minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     row-gap: 46px;
   }
-  .trail-seg-down::after { height: 46px; }
+  /* Single connected column: every stop drops straight to the next.
+     Selectors match the base nth-child specificity so they actually win. */
+  .memory-trail > li:nth-child(4n + 1),
+  .memory-trail > li:nth-child(4n + 2),
+  .memory-trail > li:nth-child(4n + 3),
+  .memory-trail > li:nth-child(4n + 4) {
+    grid-column: 1;
+    transform: none;
+  }
+  .memory-trail > li:nth-child(4n + 1)::after,
+  .memory-trail > li:nth-child(4n + 3)::after {
+    top: 100%;
+    left: 50%;
+    right: auto;
+    width: auto;
+    height: 46px;
+    border-top: 0;
+    border-left: 4px dashed;
+    transform: translateX(-50%);
+  }
+  .memory-trail > li:nth-child(4n + 2)::after,
+  .memory-trail > li:nth-child(4n + 4)::after {
+    height: 46px;
+  }
   .memory-stop { min-height: 105px; grid-template-columns: 64px minmax(0, 1fr); }
   .memory-stop-cover { width: 64px; height: 64px; }
   .map-word { font-size: 3.9375rem; }

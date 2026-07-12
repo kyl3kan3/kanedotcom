@@ -394,7 +394,6 @@ export default function AdventureBook({
   const [currentVote, setCurrentVote] = useState(initialCurrentVote);
   const [syncMessage, setSyncMessage] = useState("All changes saved");
   const [tickerPaused, setTickerPaused] = useState(false);
-  const [trailCols, setTrailCols] = useState(3);
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -699,16 +698,6 @@ export default function AdventureBook({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   });
-
-  useEffect(() => {
-    const computeTrailCols = () => {
-      const width = window.innerWidth;
-      setTrailCols(width <= 640 ? 1 : width <= 1120 ? 2 : 3);
-    };
-    computeTrailCols();
-    window.addEventListener("resize", computeTrailCols);
-    return () => window.removeEventListener("resize", computeTrailCols);
-  }, []);
 
   const closeMobileNav = () => {
     mobileNavRef.current?.removeAttribute("open");
@@ -1685,32 +1674,12 @@ export default function AdventureBook({
           <span className="map-word word-west" aria-hidden="true">THEN</span>
           <span className="map-word word-home" aria-hidden="true">NOW</span>
           {bookTrips.length > 0 ? (
-            <ol
-              className="memory-trail"
-              style={{ "--trail-cols": trailCols } as CSSProperties}
-              aria-label="Published family chapters"
-            >
+            <ol className="memory-trail" aria-label="Published family chapters">
               {bookTrips.map((trip, index) => {
                 const cover = trip.photos[0];
                 const active = activeTrip?.id === trip.id;
-                const row = Math.floor(index / trailCols);
-                const columnInRow = index % trailCols;
-                const column =
-                  row % 2 === 0 ? columnInRow : trailCols - 1 - columnInRow;
-                const connector =
-                  index === bookTrips.length - 1
-                    ? ""
-                    : columnInRow === trailCols - 1
-                      ? "trail-seg-down"
-                      : row % 2 === 0
-                        ? "trail-seg-right"
-                        : "trail-seg-left";
                 return (
-                  <li
-                    className={connector}
-                    style={{ gridRow: row + 1, gridColumn: column + 1 }}
-                    key={trip.id}
-                  >
+                  <li key={trip.id}>
                     <button
                       className={`memory-stop ${active ? "active" : ""}`}
                       style={{ "--pin-color": trip.accent } as CSSProperties}
