@@ -990,17 +990,70 @@ video {
   pointer-events: none;
 }
 
-.trail-hint {
+.trail-scrubber-wrap {
   position: absolute;
-  bottom: 16px;
+  bottom: 12px;
   left: 50%;
   z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  width: min(58%, 520px);
+  transform: translateX(-50%);
+}
+
+.trail-hint {
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   font-family: var(--font-script);
-  font-size: 1.1875rem;
+  font-size: 1.125rem;
   font-weight: 700;
   pointer-events: none;
-  transform: translateX(-50%) rotate(-2deg);
+  transform: rotate(-2deg);
+}
+
+.trail-scrubber {
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  appearance: none;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ink) 55%, transparent) 0 9px,
+      transparent 9px 17px
+    )
+    center / 100% 3px no-repeat;
+  cursor: grab;
+}
+
+.trail-scrubber:active { cursor: grabbing; }
+
+.trail-scrubber::-webkit-slider-runnable-track {
+  height: 34px;
+  background: transparent;
+}
+
+.trail-scrubber::-moz-range-track {
+  height: 34px;
+  background: transparent;
+}
+
+.trail-scrubber::-webkit-slider-thumb {
+  width: 32px;
+  height: 32px;
+  appearance: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M18 2.6c9.4-.7 15.8 5.6 15.4 15s-5.6 16.3-15.4 15.8S2.2 27.4 2.6 17.6 8.6 3.3 18 2.6Z' fill='%23fffdf7' stroke='%23183153' stroke-width='2.4'/%3E%3Cpath d='M12.5 12.5l13 5.5-13 5.5 3.2-5.5z' fill='%23c0432f'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  filter: drop-shadow(0 4px 0 color-mix(in srgb, var(--ink) 24%, transparent));
+}
+
+.trail-scrubber::-moz-range-thumb {
+  width: 32px;
+  height: 32px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M18 2.6c9.4-.7 15.8 5.6 15.4 15s-5.6 16.3-15.4 15.8S2.2 27.4 2.6 17.6 8.6 3.3 18 2.6Z' fill='%23fffdf7' stroke='%23183153' stroke-width='2.4'/%3E%3Cpath d='M12.5 12.5l13 5.5-13 5.5 3.2-5.5z' fill='%23c0432f'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  border: 0;
+  filter: drop-shadow(0 4px 0 color-mix(in srgb, var(--ink) 24%, transparent));
 }
 
 .adventure-map {
@@ -1018,9 +1071,10 @@ video {
   border-radius: 41% 53% 45% 55% / 12% 11% 14% 13%;
   box-shadow: 14px 18px 0 color-mix(in srgb, var(--ink) 9%, transparent);
   scroll-padding-inline: 40px;
-  scrollbar-color: color-mix(in srgb, var(--ink) 34%, transparent) transparent;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
+
+.adventure-map::-webkit-scrollbar { display: none; }
 
 .adventure-map::before {
   position: absolute;
@@ -1029,15 +1083,6 @@ video {
   pointer-events: none;
   border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent);
   border-radius: inherit;
-}
-
-.adventure-map::-webkit-scrollbar { height: 9px; }
-.adventure-map::-webkit-scrollbar-track { background: transparent; }
-.adventure-map::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ink) 27%, transparent);
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
 }
 
 .map-word {
@@ -3863,7 +3908,8 @@ video {
   .trail-nav small { font-size: 0.8125rem; }
   .trail-nav.previous { left: 8px; }
   .trail-nav.next { right: 8px; }
-  .trail-hint { bottom: 10px; font-size: 1rem; }
+  .trail-scrubber-wrap { bottom: 6px; width: min(74%, 420px); }
+  .trail-hint { font-size: 0.9375rem; }
   .memory-trail {
     grid-auto-columns: 220px;
     gap: 22px;

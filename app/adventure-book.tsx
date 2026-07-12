@@ -397,6 +397,7 @@ export default function AdventureBook({
   const [trailScroll, setTrailScroll] = useState({
     canBack: false,
     canForward: false,
+    progress: 0,
   });
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
@@ -712,12 +713,24 @@ export default function AdventureBook({
       const next = {
         canBack: map.scrollLeft > 4,
         canForward: map.scrollLeft < maxScroll - 4,
+        progress:
+          maxScroll > 0
+            ? Math.round((map.scrollLeft / maxScroll) * 1000)
+            : 0,
       };
       return next.canBack === current.canBack &&
-        next.canForward === current.canForward
+        next.canForward === current.canForward &&
+        next.progress === current.progress
         ? current
         : next;
     });
+  };
+
+  const scrubTrail = (value: number) => {
+    const map = adventureMapRef.current;
+    if (!map) return;
+    const maxScroll = map.scrollWidth - map.clientWidth;
+    map.scrollLeft = (value / 1000) * maxScroll;
   };
 
   const scrollTrail = (direction: -1 | 1) => {
@@ -1780,9 +1793,23 @@ export default function AdventureBook({
               <span aria-hidden="true">→</span>
               <small aria-hidden="true">later</small>
             </button>
-            <span className="trail-hint" aria-hidden="true">
-              slide along the trail ➤
-            </span>
+            <div className="trail-scrubber-wrap">
+              <span className="trail-hint" aria-hidden="true">
+                slide along the trail
+              </span>
+              <input
+                type="range"
+                className="trail-scrubber"
+                min={0}
+                max={1000}
+                step={1}
+                value={trailScroll.progress}
+                onChange={(event) =>
+                  scrubTrail(Number(event.currentTarget.value))
+                }
+                aria-label="Slide along the memory trail timeline"
+              />
+            </div>
           </>
         )}
         </div>
