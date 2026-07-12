@@ -1768,6 +1768,7 @@ export default function AdventureBook({
               aria-label="Show earlier stops on the memory trail"
             >
               <span aria-hidden="true">←</span>
+              <small aria-hidden="true">earlier</small>
             </button>
             <button
               type="button"
@@ -1777,7 +1778,11 @@ export default function AdventureBook({
               aria-label="Show later stops on the memory trail"
             >
               <span aria-hidden="true">→</span>
+              <small aria-hidden="true">later</small>
             </button>
+            <span className="trail-hint" aria-hidden="true">
+              slide along the trail ➤
+            </span>
           </>
         )}
         </div>
