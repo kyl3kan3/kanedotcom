@@ -65,6 +65,9 @@ test("Neon Auth is exposed through Next.js and protects application routes", () 
     "verify-email",
     "verification-form.tsx",
   );
+  const rootLayout = read("app", "layout.tsx");
+  const authLayout = read("app", "auth", "layout.tsx");
+  const accountLayout = read("app", "account", "layout.tsx");
   const proxy = read("proxy.ts");
 
   assert.match(authServer, /createNeonAuth/);
@@ -76,6 +79,9 @@ test("Neon Auth is exposed through Next.js and protects application routes", () 
   assert.match(authRoute, /getAuth\(\)\.handler\(\)/);
   assert.match(authPage, /AuthView/);
   assert.match(verificationForm, /emailOtp\.verifyEmail/);
+  assert.doesNotMatch(rootLayout, /Providers/);
+  assert.match(authLayout, /<Providers>/);
+  assert.match(accountLayout, /<Providers>/);
   assert.match(proxy, /getAuth\(\)\.middleware/);
   assert.match(proxy, /loginUrl:\s*["']\/auth\/sign-in["']/);
   assert.match(proxy, /request\.method\s*===\s*["']POST["']/);
@@ -96,6 +102,7 @@ test("family authorization is server-derived and enforced before mutations", () 
   assert.match(family, /export async function requireFamilyContext/);
   assert.match(actions, /requireFamilyContext\(\)/);
   assert.match(actions, /familyMembers\.familyId/);
+  assert.doesNotMatch(actions, /revalidatePath/);
   assert.doesNotMatch(
     actions,
     /function\s+\w+\s*\([^)]*familyId\s*:/,
@@ -296,6 +303,8 @@ test("Google Photos imports become permanent private family memories", () => {
   assert.match(delivery, /getFamilyContext\(\)/);
   assert.match(delivery, /eq\(memories\.familyId, member\.familyId\)/);
   assert.match(delivery, /getPrivateMemoryUrl/);
+  assert.match(delivery, /private, max-age=240/);
+  assert.match(delivery, /["']Vary["'],\s*["']Cookie["']/);
   assert.match(repair, /isJpeg/);
   assert.match(repair, /mime_type = 'image\/jpeg'/);
   assert.match(repair, /--apply/);
@@ -529,7 +538,9 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(client, /data-testid=["']organize-memories["']/);
   assert.match(client, /data-testid=["']memory-organizer["']/);
   assert.match(client, /data-testid=["']create-approved-trips["']/);
-  assert.match(client, /MessageResponse/);
+  assert.doesNotMatch(client, /MessageResponse/);
+  assert.match(client, /className=["']generated-trip-title["']/);
+  assert.match(client, /className=["']generated-trip-summary["']/);
   assert.match(client, /void generateTripDrafts\(\)/);
   assert.match(organizer, /\.limit\(50\)/);
   assert.match(client, /queuedForLater/);

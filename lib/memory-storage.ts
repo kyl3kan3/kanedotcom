@@ -138,19 +138,56 @@ export async function deletePrivateMemoryBlob(pathname: string) {
   await del(pathname);
 }
 
+const privateMemoryUrlCache = new Map<
+  string,
+  { expiresAt: number; url: string }
+>();
+const privateMemoryUrlRequests = new Map<string, Promise<string>>();
+
 export async function getPrivateMemoryUrl(pathname: string) {
+  const now = Date.now();
+  const cached = privateMemoryUrlCache.get(pathname);
+  if (cached && cached.expiresAt > now) return cached.url;
+
+  const pending = privateMemoryUrlRequests.get(pathname);
+  if (pending) return pending;
+
   const validUntil = Date.now() + 5 * 60 * 1000;
-  const signedToken = await issueSignedToken({
-    pathname,
-    operations: ["get"],
-    validUntil,
-  });
-  const { presignedUrl } = await presignUrl(signedToken, {
-    access: "private",
-    operation: "get",
-    pathname,
-    validUntil,
+  const request = (async () => {
+    const signedToken = await issueSignedToken({
+      pathname,
+      operations: ["get"],
+      validUntil,
+    });
+    const { presignedUrl } = await presignUrl(signedToken, {
+      access: "private",
+      operation: "get",
+      pathname,
+      validUntil,
+    });
+
+    // Reuse duplicate thumbnail/card requests while leaving a safety margin
+    // before the underlying five-minute signature expires.
+    privateMemoryUrlCache.set(pathname, {
+      expiresAt: validUntil - 30_000,
+      url: presignedUrl,
+    });
+    if (privateMemoryUrlCache.size > 500) {
+      for (const [key, value] of privateMemoryUrlCache) {
+        if (value.expiresAt <= Date.now()) privateMemoryUrlCache.delete(key);
+      }
+      while (privateMemoryUrlCache.size > 500) {
+        const oldestKey = privateMemoryUrlCache.keys().next().value;
+        if (!oldestKey) break;
+        privateMemoryUrlCache.delete(oldestKey);
+      }
+    }
+
+    return presignedUrl;
+  })().finally(() => {
+    privateMemoryUrlRequests.delete(pathname);
   });
 
-  return presignedUrl;
+  privateMemoryUrlRequests.set(pathname, request);
+  return request;
 }

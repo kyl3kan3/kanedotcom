@@ -134,16 +134,10 @@ export default async function Home() {
     db
       .select({
         tripId: trips.id,
-        title: trips.title,
-        summary: trips.summary,
-        startAt: trips.startAt,
-        endAt: trips.endAt,
         memoryId: memories.id,
         memoryKind: memories.kind,
         memoryCapturedAt: memories.capturedAt,
         memoryDurationMs: memories.durationMs,
-        memoryWidth: memories.width,
-        memoryHeight: memories.height,
       })
       .from(trips)
       .leftJoin(
@@ -231,18 +225,12 @@ export default async function Home() {
     string,
     {
       id: string;
-      title: string;
-      summary: string;
-      startAt: string | null;
-      endAt: string | null;
       memories: Array<{
         id: string;
         kind: "image" | "video";
         url: string;
         capturedAt: string | null;
         durationMs: number | null;
-        width: number | null;
-        height: number | null;
       }>;
     }
   >();
@@ -250,10 +238,6 @@ export default async function Home() {
   for (const row of generatedTripRows) {
     const trip = generatedTrips.get(row.tripId) ?? {
       id: row.tripId,
-      title: row.title,
-      summary: row.summary ?? "A new family chapter.",
-      startAt: row.startAt?.toISOString() ?? null,
-      endAt: row.endAt?.toISOString() ?? null,
       memories: [],
     };
     if (row.memoryId && row.memoryKind) {
@@ -263,8 +247,6 @@ export default async function Home() {
         url: `/api/memories/${row.memoryId}`,
         capturedAt: row.memoryCapturedAt?.toISOString() ?? null,
         durationMs: row.memoryDurationMs,
-        width: row.memoryWidth,
-        height: row.memoryHeight,
       });
     }
     generatedTrips.set(row.tripId, trip);
@@ -278,11 +260,17 @@ export default async function Home() {
       })),
     );
     return {
-      ...trip,
+      id: trip.id,
       title: presentation.title,
       summary: presentation.summary,
       startAt: presentation.startAt?.toISOString() ?? null,
       endAt: presentation.endAt?.toISOString() ?? null,
+      memories: trip.memories.map((memory) => ({
+        id: memory.id,
+        kind: memory.kind,
+        url: memory.url,
+        durationMs: memory.durationMs,
+      })),
     };
   });
 
