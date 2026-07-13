@@ -334,8 +334,15 @@ export default function AdventureBook({
   const [syncMessage, setSyncMessage] = useState("Neon synced");
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
+  const [mapScrollState, setMapScrollState] = useState({
+    progress: 0,
+    canGoEarlier: false,
+    canGoLater: false,
+    hasOverflow: false,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
+  const adventureMapRef = useRef<HTMLDivElement>(null);
   const galleryDialogRef = useRef<HTMLDivElement>(null);
   const galleryCloseRef = useRef<HTMLButtonElement>(null);
   const galleryReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -562,6 +569,67 @@ export default function AdventureBook({
   }, []);
 
   useEffect(() => {
+    const map = adventureMapRef.current;
+    if (!map || bookTrips.length === 0) return;
+
+    const updateMapScrollState = () => {
+      const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+      const progress =
+        maximumScroll > 1
+          ? Math.round(
+              Math.min(
+                100,
+                Math.max(0, (map.scrollLeft / maximumScroll) * 100),
+              ),
+            )
+          : 0;
+      const nextState = {
+        progress,
+        canGoEarlier: map.scrollLeft > 2,
+        canGoLater: map.scrollLeft < maximumScroll - 2,
+        hasOverflow: maximumScroll > 2,
+      };
+
+      setMapScrollState((current) =>
+        current.progress === nextState.progress &&
+        current.canGoEarlier === nextState.canGoEarlier &&
+        current.canGoLater === nextState.canGoLater &&
+        current.hasOverflow === nextState.hasOverflow
+          ? current
+          : nextState,
+      );
+    };
+
+    let animationFrame = 0;
+    const requestMapScrollUpdate = () => {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        updateMapScrollState();
+      });
+    };
+
+    requestMapScrollUpdate();
+    map.addEventListener("scroll", requestMapScrollUpdate, { passive: true });
+    window.addEventListener("resize", requestMapScrollUpdate);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(requestMapScrollUpdate);
+    resizeObserver?.observe(map);
+    const trail = map.querySelector(".memory-trail");
+    if (trail) resizeObserver?.observe(trail);
+
+    return () => {
+      map.removeEventListener("scroll", requestMapScrollUpdate);
+      window.removeEventListener("resize", requestMapScrollUpdate);
+      resizeObserver?.disconnect();
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [bookTrips.length]);
+
+  useEffect(() => {
     if (!gallery && !importOpen && !organizerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (gallery) {
@@ -633,6 +701,47 @@ export default function AdventureBook({
       featuredHeadingRef.current?.focus({ preventScroll: true });
     });
   };
+
+  const scrollMemoryTrail = (direction: -1 | 1) => {
+    const map = adventureMapRef.current;
+    if (!map || bookTrips.length <= 1) return;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const targetStop = Math.min(
+      bookTrips.length,
+      Math.max(1, visibleTrailStop + direction),
+    );
+    const targetProgress =
+      ((targetStop - 1) / (bookTrips.length - 1)) * 100;
+    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+    map.scrollTo({
+      left: (targetProgress / 100) * maximumScroll,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+    setMapScrollState((current) => ({
+      ...current,
+      progress: targetProgress,
+    }));
+  };
+
+  const setMemoryTrailProgress = (progress: number) => {
+    const map = adventureMapRef.current;
+    if (!map) return;
+    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+    map.scrollLeft = (progress / 100) * maximumScroll;
+    setMapScrollState((current) => ({ ...current, progress }));
+  };
+
+  const visibleTrailStop =
+    bookTrips.length <= 1
+      ? bookTrips.length
+      : Math.min(
+          bookTrips.length,
+          Math.round(
+            (mapScrollState.progress / 100) * (bookTrips.length - 1),
+          ) + 1,
+        );
 
   const surpriseMe = () => {
     if (bookTrips.length === 0) return;
@@ -1522,7 +1631,12 @@ export default function AdventureBook({
           </p>
         </div>
 
-        <div className="adventure-map">
+        <div
+          className="adventure-map"
+          ref={adventureMapRef}
+          role="region"
+          aria-label="Scrollable family memory trail"
+        >
           <span className="map-word word-west" aria-hidden="true">THEN</span>
           <span className="map-word word-home" aria-hidden="true">NOW</span>
           {bookTrips.length > 0 ? (
@@ -1574,6 +1688,87 @@ export default function AdventureBook({
             </div>
           )}
         </div>
+        {bookTrips.length > 0 && (
+          <div
+            className="map-route-controls"
+            role="group"
+            aria-label="Memory trail navigation"
+          >
+            <button
+              type="button"
+              className="map-route-step map-route-earlier"
+              onClick={() => scrollMemoryTrail(-1)}
+              disabled={!mapScrollState.canGoEarlier}
+              aria-label="Show earlier stops on the memory trail"
+            >
+              <span aria-hidden="true">&larr;</span>
+              <small>Earlier</small>
+            </button>
+
+            <div className="map-route-slider">
+              <div className="map-route-meta" aria-hidden="true">
+                <span>THEN</span>
+                <b>
+                  {mapScrollState.hasOverflow
+                    ? `STOP ${String(visibleTrailStop).padStart(2, "0")} OF ${String(bookTrips.length).padStart(2, "0")}`
+                    : "WHOLE TRAIL IN VIEW"}
+                </b>
+                <span>NOW</span>
+              </div>
+              <div className="map-route-track">
+                <div className="map-route-ticks" aria-hidden="true">
+                  {bookTrips.map((trip, index) => (
+                    <i
+                      className={
+                        index < visibleTrailStop - 1
+                          ? "passed"
+                          : index === visibleTrailStop - 1
+                            ? "current"
+                            : ""
+                      }
+                      key={trip.id}
+                    />
+                  ))}
+                </div>
+                <input
+                  className="map-route-range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round(mapScrollState.progress)}
+                  onChange={(event) =>
+                    setMemoryTrailProgress(Number(event.currentTarget.value))
+                  }
+                  disabled={!mapScrollState.hasOverflow}
+                  aria-label="Move along the family memory trail"
+                  aria-valuetext={
+                    mapScrollState.hasOverflow
+                      ? `Viewing stop ${visibleTrailStop} of ${bookTrips.length}`
+                      : `All ${bookTrips.length} stops are visible`
+                  }
+                  style={{
+                    "--route-progress": `${mapScrollState.progress}%`,
+                  } as CSSProperties}
+                />
+              </div>
+              <span className="map-route-note" aria-hidden="true">
+                drag the trail or use the arrows
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="map-route-step map-route-later"
+              onClick={() => scrollMemoryTrail(1)}
+              disabled={!mapScrollState.canGoLater}
+              aria-label="Show later stops on the memory trail"
+            >
+              <span aria-hidden="true">&rarr;</span>
+              <small>Later</small>
+            </button>
+          </div>
+        )}
       </section>
 
       {activeTrip && (
