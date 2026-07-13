@@ -206,10 +206,11 @@ test("crew and next-adventure totals come from active family data", () => {
 
 test("approved trips power the cover, memory trail, chapter reader, and game", () => {
   const client = read("app", "adventure-book.tsx");
+  const trail = read("app", "memory-trail-section.tsx");
   const styles = read("app", "globals.css");
 
   assert.match(client, /generatedTrips\.map\(\(trip,\s*index\)/);
-  assert.match(client, /className=["']memory-trail["']/);
+  assert.match(trail, /className=["']memory-trail["']/);
   assert.match(client, /activeTrip\.memories\.length/);
   assert.match(client, /activeTrip\.photos/);
   assert.match(client, /activeTrip\.videos/);
@@ -224,33 +225,78 @@ test("approved trips power the cover, memory trail, chapter reader, and game", (
 
 test("the adventure view bounds continuous rendering and media work", () => {
   const client = read("app", "adventure-book.tsx");
+  const featuredPhotos = read("app", "featured-photo-stack.tsx");
+  const generatedTrips = read("app", "generated-trips-section.tsx");
+  const importGate = read("app", "import-dialog-gate.tsx");
+  const importPreview = read("app", "import-preview-grid.tsx");
+  const memoryTrail = read("app", "memory-trail-section.tsx");
+  const quiz = read("app", "trip-quiz-card.tsx");
   const styles = read("app", "globals.css");
 
-  assert.match(client, /const\s+MemoryTrailControls\s*=\s*memo/);
-  assert.doesNotMatch(client, /const\s+\[mapScrollState/);
-  assert.match(client, /const\s+CHAPTER_PREVIEW_SCAN_LIMIT\s*=\s*6/);
-  assert.match(client, /const\s+CHAPTER_PREVIEW_IMAGE_LIMIT\s*=\s*3/);
-  assert.match(client, /\.slice\(0,\s*CHAPTER_PREVIEW_SCAN_LIMIT\)/);
-  assert.match(client, /if\s*\(memory\.kind\s*===\s*["']video["']\)\s*return true/);
-  assert.match(client, /fetchPriority=["']low["']/);
-  assert.match(client, /Math\.min\(3,\s*activeTrip\.photos\.length\)/);
+  assert.match(memoryTrail, /const\s+MemoryTrailControls\s*=\s*memo/);
+  assert.doesNotMatch(memoryTrail, /const\s+\[mapScrollState/);
+  assert.match(memoryTrail, /const\s+maximumScrollRef\s*=\s*useRef/);
+  assert.match(generatedTrips, /const\s+CHAPTER_PREVIEW_SCAN_LIMIT\s*=\s*6/);
+  assert.match(generatedTrips, /const\s+CHAPTER_PREVIEW_IMAGE_LIMIT\s*=\s*3/);
+  assert.match(generatedTrips, /\.slice\(0,\s*CHAPTER_PREVIEW_SCAN_LIMIT\)/);
+  assert.match(generatedTrips, /if\s*\(memory\.kind\s*===\s*["']video["']\)\s*return true/);
+  assert.match(generatedTrips, /fetchPriority=["']low["']/);
+  assert.match(featuredPhotos, /Math\.min\(3,\s*photos\.length\)/);
+  assert.match(client, /const\s+DEVICE_IMPORT_LIMIT\s*=\s*50/);
+  assert.match(importPreview, /const\s+IMPORT_PREVIEW_BATCH\s*=\s*12/);
+  assert.match(client, /if\s*\(files\.length\s*<\s*DEVICE_IMPORT_LIMIT\)\s*files\.push\(file\)/);
+  assert.match(importPreview, /media\.slice\(0,\s*previewLimit\)/);
+  assert.match(importPreview, /aria-controls=["']import-preview-grid["']/);
+  assert.match(importGate, /useImperativeHandle\(ref/);
+  assert.doesNotMatch(client, /const\s+\[importOpen,\s*setImportOpen\]/);
+  assert.match(client, /startTransition\(\(\)\s*=>\s*\{\s*setImportedMedia/);
+  assert.match(quiz, /startTransition\(\(\)\s*=>\s*onStampEarned/);
+  assert.doesNotMatch(client, /importedMedia\.slice\(0,\s*60\)/);
   assert.doesNotMatch(client, /preload=["']metadata["']/);
   assert.doesNotMatch(styles, /animation:\s*(?:plane-float|ticker)[^;]*infinite/);
 });
 
+test("high-frequency controls keep interaction state outside the page root", () => {
+  const client = read("app", "adventure-book.tsx");
+  const featuredPhotos = read("app", "featured-photo-stack.tsx");
+  const generatedTrips = read("app", "generated-trips-section.tsx");
+  const memoryTrail = read("app", "memory-trail-section.tsx");
+  const quiz = read("app", "trip-quiz-card.tsx");
+  const vote = read("app", "next-adventure-vote.tsx");
+
+  assert.match(featuredPhotos, /export\s+const\s+FeaturedPhotoStack\s*=\s*memo/);
+  assert.match(generatedTrips, /export\s+const\s+GeneratedTripsSection\s*=\s*memo/);
+  assert.match(memoryTrail, /export\s+const\s+MemoryTrailSection\s*=\s*memo/);
+  assert.match(featuredPhotos, /const\s+\[photoIndex,\s*setPhotoIndex\]\s*=\s*useState/);
+  assert.match(quiz, /export\s+const\s+TripQuizCard\s*=\s*memo/);
+  assert.match(quiz, /const\s+\[quizAnswer,\s*setQuizAnswer\]\s*=\s*useState/);
+  assert.match(vote, /export\s+const\s+NextAdventureVote\s*=\s*memo/);
+  assert.match(vote, /const\s+desiredVoteRef\s*=\s*useRef/);
+  assert.match(vote, /const\s+requestInFlightRef\s*=\s*useRef/);
+  assert.doesNotMatch(client, /const\s+\[photoIndex,\s*setPhotoIndex\]/);
+  assert.doesNotMatch(client, /const\s+\[quizAnswer,\s*setQuizAnswer\]/);
+  assert.doesNotMatch(client, /const\s+\[votes,\s*setVotes\]/);
+});
+
 test("family photos open an accessible keyboard and touch gallery", () => {
   const client = read("app", "adventure-book.tsx");
+  const generatedTrips = read("app", "generated-trips-section.tsx");
+  const gallery = read("app", "photo-gallery-dialog.tsx");
   const styles = read("app", "globals.css");
 
   assert.match(client, /className=["']memory-preview-button["']/);
-  assert.match(client, /className=["']chapter-preview-button["']/);
-  assert.match(client, /aria-labelledby=["']gallery-title["']/);
-  assert.match(client, /event\.key === ["']ArrowLeft["']/);
-  assert.match(client, /setPointerCapture\(event\.pointerId\)/);
+  assert.match(generatedTrips, /className=["']chapter-preview-button["']/);
+  assert.match(client, /photoGalleryRef\.current\?\.open\(/);
+  assert.doesNotMatch(client, /const\s+\[gallery,\s*setGallery\]/);
+  assert.match(gallery, /useImperativeHandle\(ref/);
+  assert.match(gallery, /aria-labelledby=["']gallery-title["']/);
+  assert.match(gallery, /event\.key === ["']ArrowLeft["']/);
+  assert.match(gallery, /setPointerCapture\(event\.pointerId\)/);
   assert.match(client, /const\s+surpriseMe\s*=/);
-  assert.match(client, /aria-controls=["']featured-trip["']/);
+  assert.match(generatedTrips, /aria-controls=["']featured-trip["']/);
   assert.match(styles, /\.lightbox-stage\s*\{/);
   assert.match(styles, /touch-action:\s*pan-y/);
+  assert.match(styles, /aspect-ratio:\s*4\s*\/\s*3/);
   assert.match(styles, /\.memory-shelf-grid figure:focus-within/);
 });
 
@@ -522,6 +568,7 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
     "route.ts",
   );
   const client = read("app", "adventure-book.tsx");
+  const generatedTrips = read("app", "generated-trips-section.tsx");
   const page = read("app", "page.tsx");
   const holidays = read("lib", "family-holidays.ts");
   const envExample = read(".env.example");
@@ -556,8 +603,8 @@ test("AI trip organization is admin-only, private, reviewable, and atomic", () =
   assert.match(client, /data-testid=["']memory-organizer["']/);
   assert.match(client, /data-testid=["']create-approved-trips["']/);
   assert.doesNotMatch(client, /MessageResponse/);
-  assert.match(client, /className=["']generated-trip-title["']/);
-  assert.match(client, /className=["']generated-trip-summary["']/);
+  assert.match(generatedTrips, /className=["']generated-trip-title["']/);
+  assert.match(generatedTrips, /className=["']generated-trip-summary["']/);
   assert.match(client, /void generateTripDrafts\(\)/);
   assert.match(organizer, /\.limit\(50\)/);
   assert.match(client, /queuedForLater/);
@@ -586,4 +633,18 @@ test("trip dates use one family timezone during server and client rendering", ()
     /const\s+FAMILY_TIME_ZONE\s*=\s*["']America\/Chicago["']/,
   );
   assert.match(client, /timeZone:\s*FAMILY_TIME_ZONE/);
+  assert.match(
+    client,
+    /const\s+TRIP_DATE_FORMATTER\s*=\s*new Intl\.DateTimeFormat/,
+  );
+  assert.match(
+    client,
+    /dateLabel:\s*formatTripDateRange\(trip\.startAt,\s*trip\.endAt\)/,
+  );
+  assert.match(client, /yearLabel:\s*tripYear\(trip\.startAt\)/);
+  assert.doesNotMatch(client, /\.toLocaleDateString\(/);
+  assert.match(
+    client,
+    /const\s+selectTrip\s*=([\s\S]*?)window\.requestAnimationFrame\(\(\)\s*=>\s*\{\s*window\.requestAnimationFrame\(/,
+  );
 });
