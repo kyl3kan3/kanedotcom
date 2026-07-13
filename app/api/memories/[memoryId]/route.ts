@@ -43,7 +43,8 @@ export async function GET(
   try {
     const url = await getPrivateMemoryUrl(memory.storageKey);
     const response = NextResponse.redirect(url, 307);
-    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("Cache-Control", "private, max-age=240");
+    response.headers.set("Vary", "Cookie");
     return response;
   } catch {
     return NextResponse.json(

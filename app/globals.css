@@ -1,8 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Nunito+Sans:opsz,wght@6..12,500;6..12,600;6..12,700;6..12,800;6..12,900&display=swap");
 @import "tailwindcss";
 @import "@neondatabase/auth/ui/tailwind";
 @import "tw-animate-css";
-@source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -68,25 +66,13 @@ html {
 body {
   margin: 0;
   background:
+    repeating-radial-gradient(circle at 0 0, transparent 0, rgba(24, 49, 83, 0.01) 1px, transparent 1.5px, transparent 4px) 0 0 / 6px 6px,
     radial-gradient(circle at 14% 8%, rgba(255, 209, 102, 0.13), transparent 24rem),
     radial-gradient(circle at 86% 42%, rgba(58, 134, 255, 0.06), transparent 30rem),
     var(--paper);
   color: var(--ink);
   font-family: "Nunito Sans", "Trebuchet MS", sans-serif;
   text-rendering: optimizeLegibility;
-}
-
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-  content: "";
-  opacity: 0.28;
-  background-image:
-    repeating-radial-gradient(circle at 0 0, transparent 0, rgba(24, 49, 83, 0.035) 1px, transparent 1.5px, transparent 4px);
-  background-size: 6px 6px;
-  mix-blend-mode: multiply;
 }
 
 button,
@@ -135,6 +121,17 @@ video {
 .site-shell {
   min-height: 100vh;
   overflow: hidden;
+}
+
+.memory-shelf-section,
+.generated-trips-section,
+.map-section,
+.featured-trip,
+.challenge-section,
+.tour-guides,
+.next-adventure {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
 }
 
 .topbar {
@@ -1104,8 +1101,6 @@ video {
   line-height: 1.75;
 }
 
-.trip-intro-story p { margin: 0; }
-
 .chapter-facts {
   color: var(--trip-accent);
   font-family: "Caveat", cursive;
@@ -1847,8 +1842,7 @@ video {
   place-items: center;
   padding: 24px;
   overflow-y: auto;
-  background: rgba(8, 24, 41, 0.78);
-  backdrop-filter: blur(9px);
+  background: rgba(8, 24, 41, 0.9);
   animation: fade-in 180ms ease both;
 }
 
@@ -3089,13 +3083,9 @@ video {
   letter-spacing: -0.035em;
 }
 
-.generated-trip-title p,
-.generated-trip-summary p,
-.trip-draft-title p,
-.trip-draft-summary p { margin: 0; }
-
 .generated-trip-summary,
 .trip-draft-summary {
+  margin: 0;
   color: var(--muted-ink);
   line-height: 1.6;
 }

@@ -1,7 +1,6 @@
 "use server";
 
 import { and, count, eq, isNull, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db";
 import {
@@ -76,7 +75,6 @@ export async function completeTripQuiz(
       },
     });
 
-  revalidatePath("/");
   return { correct, actualMemoryCount: trip.memoryCount };
 }
 
@@ -113,7 +111,6 @@ export async function voteNextAdventure(optionSlug: string) {
     )
     .groupBy(tripVotes.optionSlug);
 
-  revalidatePath("/");
   return {
     selected: optionSlug,
     counts: Object.fromEntries(rows.map((row) => [row.optionSlug, row.total])),
@@ -153,7 +150,6 @@ export async function saveMemoryMetadata(
     })),
   );
 
-  revalidatePath("/");
   return { saved: safeItems.length };
 }
 
