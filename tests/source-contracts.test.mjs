@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const fromRoot = (...parts) => join(root, ...parts);
-const read = (...parts) => readFileSync(fromRoot(...parts), "utf8");
+const read = (...parts) =>
+  readFileSync(fromRoot(...parts), "utf8").replace(/\r\n?/g, "\n");
 
 test("package scripts use the native Next.js runtime", () => {
   const packageJson = JSON.parse(read("package.json"));
