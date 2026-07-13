@@ -5,6 +5,8 @@
 import {
   type ChangeEvent,
   type CSSProperties,
+  type RefObject,
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -267,6 +269,217 @@ type AdventureBookProps = {
 };
 
 const voteOptions = NEXT_ADVENTURE_OPTIONS;
+const CHAPTER_PREVIEW_SCAN_LIMIT = 6;
+const CHAPTER_PREVIEW_IMAGE_LIMIT = 3;
+
+function chapterPreviewMemories(memories: GeneratedMemory[]) {
+  let imageCount = 0;
+  return memories.slice(0, CHAPTER_PREVIEW_SCAN_LIMIT).filter((memory) => {
+    if (memory.kind === "video") return true;
+    imageCount += 1;
+    return imageCount <= CHAPTER_PREVIEW_IMAGE_LIMIT;
+  });
+}
+
+type MemoryTrailControlsProps = {
+  mapRef: RefObject<HTMLDivElement | null>;
+  tripCount: number;
+};
+
+const MemoryTrailControls = memo(function MemoryTrailControls({
+  mapRef,
+  tripCount,
+}: MemoryTrailControlsProps) {
+  const [scrollState, setScrollState] = useState({
+    progress: 0,
+    canGoEarlier: false,
+    canGoLater: false,
+    hasOverflow: false,
+  });
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || tripCount === 0) return;
+
+    const updateScrollState = () => {
+      const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+      const progress =
+        maximumScroll > 1
+          ? Math.round(
+              Math.min(
+                100,
+                Math.max(0, (map.scrollLeft / maximumScroll) * 100),
+              ),
+            )
+          : 0;
+      const nextState = {
+        progress,
+        canGoEarlier: map.scrollLeft > 2,
+        canGoLater: map.scrollLeft < maximumScroll - 2,
+        hasOverflow: maximumScroll > 2,
+      };
+
+      setScrollState((current) =>
+        current.progress === nextState.progress &&
+        current.canGoEarlier === nextState.canGoEarlier &&
+        current.canGoLater === nextState.canGoLater &&
+        current.hasOverflow === nextState.hasOverflow
+          ? current
+          : nextState,
+      );
+    };
+
+    let animationFrame = 0;
+    const requestScrollUpdate = () => {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        updateScrollState();
+      });
+    };
+
+    requestScrollUpdate();
+    map.addEventListener("scroll", requestScrollUpdate, { passive: true });
+    window.addEventListener("resize", requestScrollUpdate);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(requestScrollUpdate);
+    resizeObserver?.observe(map);
+    const trail = map.querySelector(".memory-trail");
+    if (trail) resizeObserver?.observe(trail);
+
+    return () => {
+      map.removeEventListener("scroll", requestScrollUpdate);
+      window.removeEventListener("resize", requestScrollUpdate);
+      resizeObserver?.disconnect();
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [mapRef, tripCount]);
+
+  if (tripCount === 0) return null;
+
+  const visibleStop =
+    tripCount <= 1
+      ? tripCount
+      : Math.min(
+          tripCount,
+          Math.round((scrollState.progress / 100) * (tripCount - 1)) + 1,
+        );
+
+  const scrollToStop = (direction: -1 | 1) => {
+    const map = mapRef.current;
+    if (!map || tripCount <= 1) return;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const targetStop = Math.min(
+      tripCount,
+      Math.max(1, visibleStop + direction),
+    );
+    const targetProgress = ((targetStop - 1) / (tripCount - 1)) * 100;
+    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+    map.scrollTo({
+      left: (targetProgress / 100) * maximumScroll,
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+    setScrollState((current) => ({
+      ...current,
+      progress: targetProgress,
+    }));
+  };
+
+  const setProgress = (progress: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
+    map.scrollLeft = (progress / 100) * maximumScroll;
+    setScrollState((current) => ({ ...current, progress }));
+  };
+
+  return (
+    <div
+      className="map-route-controls"
+      role="group"
+      aria-label="Memory trail navigation"
+    >
+      <button
+        type="button"
+        className="map-route-step map-route-earlier"
+        onClick={() => scrollToStop(-1)}
+        disabled={!scrollState.canGoEarlier}
+        aria-label="Show earlier stops on the memory trail"
+      >
+        <span aria-hidden="true">&larr;</span>
+        <small>Earlier</small>
+      </button>
+
+      <div className="map-route-slider">
+        <div className="map-route-meta" aria-hidden="true">
+          <span>THEN</span>
+          <b>
+            {scrollState.hasOverflow
+              ? `STOP ${String(visibleStop).padStart(2, "0")} OF ${String(tripCount).padStart(2, "0")}`
+              : "WHOLE TRAIL IN VIEW"}
+          </b>
+          <span>NOW</span>
+        </div>
+        <div className="map-route-track">
+          <div className="map-route-ticks" aria-hidden="true">
+            {Array.from({ length: tripCount }, (_, index) => (
+              <i
+                className={
+                  index < visibleStop - 1
+                    ? "passed"
+                    : index === visibleStop - 1
+                      ? "current"
+                      : ""
+                }
+                key={index}
+              />
+            ))}
+          </div>
+          <input
+            className="map-route-range"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={Math.round(scrollState.progress)}
+            onChange={(event) =>
+              setProgress(Number(event.currentTarget.value))
+            }
+            disabled={!scrollState.hasOverflow}
+            aria-label="Move along the family memory trail"
+            aria-valuetext={
+              scrollState.hasOverflow
+                ? `Viewing stop ${visibleStop} of ${tripCount}`
+                : `All ${tripCount} stops are visible`
+            }
+            style={{
+              "--route-progress": `${scrollState.progress}%`,
+            } as CSSProperties}
+          />
+        </div>
+        <span className="map-route-note" aria-hidden="true">
+          drag the trail or use the arrows
+        </span>
+      </div>
+
+      <button
+        type="button"
+        className="map-route-step map-route-later"
+        onClick={() => scrollToStop(1)}
+        disabled={!scrollState.canGoLater}
+        aria-label="Show later stops on the memory trail"
+      >
+        <span aria-hidden="true">&rarr;</span>
+        <small>Later</small>
+      </button>
+    </div>
+  );
+});
 
 export default function AdventureBook({
   memberName,
@@ -334,12 +547,6 @@ export default function AdventureBook({
   const [syncMessage, setSyncMessage] = useState("Neon synced");
   const [savedMetadataCount, setSavedMetadataCount] =
     useState(savedMemoryCount);
-  const [mapScrollState, setMapScrollState] = useState({
-    progress: 0,
-    canGoEarlier: false,
-    canGoLater: false,
-    hasOverflow: false,
-  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const featuredHeadingRef = useRef<HTMLHeadingElement>(null);
   const adventureMapRef = useRef<HTMLDivElement>(null);
@@ -569,67 +776,6 @@ export default function AdventureBook({
   }, []);
 
   useEffect(() => {
-    const map = adventureMapRef.current;
-    if (!map || bookTrips.length === 0) return;
-
-    const updateMapScrollState = () => {
-      const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
-      const progress =
-        maximumScroll > 1
-          ? Math.round(
-              Math.min(
-                100,
-                Math.max(0, (map.scrollLeft / maximumScroll) * 100),
-              ),
-            )
-          : 0;
-      const nextState = {
-        progress,
-        canGoEarlier: map.scrollLeft > 2,
-        canGoLater: map.scrollLeft < maximumScroll - 2,
-        hasOverflow: maximumScroll > 2,
-      };
-
-      setMapScrollState((current) =>
-        current.progress === nextState.progress &&
-        current.canGoEarlier === nextState.canGoEarlier &&
-        current.canGoLater === nextState.canGoLater &&
-        current.hasOverflow === nextState.hasOverflow
-          ? current
-          : nextState,
-      );
-    };
-
-    let animationFrame = 0;
-    const requestMapScrollUpdate = () => {
-      if (animationFrame) return;
-      animationFrame = window.requestAnimationFrame(() => {
-        animationFrame = 0;
-        updateMapScrollState();
-      });
-    };
-
-    requestMapScrollUpdate();
-    map.addEventListener("scroll", requestMapScrollUpdate, { passive: true });
-    window.addEventListener("resize", requestMapScrollUpdate);
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(requestMapScrollUpdate);
-    resizeObserver?.observe(map);
-    const trail = map.querySelector(".memory-trail");
-    if (trail) resizeObserver?.observe(trail);
-
-    return () => {
-      map.removeEventListener("scroll", requestMapScrollUpdate);
-      window.removeEventListener("resize", requestMapScrollUpdate);
-      resizeObserver?.disconnect();
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, [bookTrips.length]);
-
-  useEffect(() => {
     if (!gallery && !importOpen && !organizerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (gallery) {
@@ -701,47 +847,6 @@ export default function AdventureBook({
       featuredHeadingRef.current?.focus({ preventScroll: true });
     });
   };
-
-  const scrollMemoryTrail = (direction: -1 | 1) => {
-    const map = adventureMapRef.current;
-    if (!map || bookTrips.length <= 1) return;
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    const targetStop = Math.min(
-      bookTrips.length,
-      Math.max(1, visibleTrailStop + direction),
-    );
-    const targetProgress =
-      ((targetStop - 1) / (bookTrips.length - 1)) * 100;
-    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
-    map.scrollTo({
-      left: (targetProgress / 100) * maximumScroll,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-    setMapScrollState((current) => ({
-      ...current,
-      progress: targetProgress,
-    }));
-  };
-
-  const setMemoryTrailProgress = (progress: number) => {
-    const map = adventureMapRef.current;
-    if (!map) return;
-    const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
-    map.scrollLeft = (progress / 100) * maximumScroll;
-    setMapScrollState((current) => ({ ...current, progress }));
-  };
-
-  const visibleTrailStop =
-    bookTrips.length <= 1
-      ? bookTrips.length
-      : Math.min(
-          bookTrips.length,
-          Math.round(
-            (mapScrollState.progress / 100) * (bookTrips.length - 1),
-          ) + 1,
-        );
 
   const surpriseMe = () => {
     if (bookTrips.length === 0) return;
@@ -1519,6 +1624,7 @@ export default function AdventureBook({
                       alt=""
                       loading="lazy"
                       decoding="async"
+                      fetchPriority="low"
                     />
                     <span className="photo-open-badge" aria-hidden="true">
                       ↗
@@ -1574,7 +1680,7 @@ export default function AdventureBook({
                 <h3 className="generated-trip-title">{trip.title}</h3>
                 <p className="generated-trip-summary">{trip.summary}</p>
                 <div className="generated-trip-media">
-                  {trip.memories.slice(0, 6).map((memory) => (
+                  {chapterPreviewMemories(trip.memories).map((memory) => (
                     <figure key={memory.id}>
                       {memory.kind === "image" ? (
                         <button
@@ -1590,6 +1696,7 @@ export default function AdventureBook({
                             alt=""
                             loading="lazy"
                             decoding="async"
+                            fetchPriority="low"
                           />
                           <span className="photo-open-badge" aria-hidden="true">
                             ↗
@@ -1662,6 +1769,7 @@ export default function AdventureBook({
                           alt=""
                           loading="lazy"
                           decoding="async"
+                          fetchPriority="low"
                         />
                       ) : (
                         <span className="memory-stop-cover memory-stop-placeholder" aria-hidden="true">{trip.icon}</span>
@@ -1688,87 +1796,10 @@ export default function AdventureBook({
             </div>
           )}
         </div>
-        {bookTrips.length > 0 && (
-          <div
-            className="map-route-controls"
-            role="group"
-            aria-label="Memory trail navigation"
-          >
-            <button
-              type="button"
-              className="map-route-step map-route-earlier"
-              onClick={() => scrollMemoryTrail(-1)}
-              disabled={!mapScrollState.canGoEarlier}
-              aria-label="Show earlier stops on the memory trail"
-            >
-              <span aria-hidden="true">&larr;</span>
-              <small>Earlier</small>
-            </button>
-
-            <div className="map-route-slider">
-              <div className="map-route-meta" aria-hidden="true">
-                <span>THEN</span>
-                <b>
-                  {mapScrollState.hasOverflow
-                    ? `STOP ${String(visibleTrailStop).padStart(2, "0")} OF ${String(bookTrips.length).padStart(2, "0")}`
-                    : "WHOLE TRAIL IN VIEW"}
-                </b>
-                <span>NOW</span>
-              </div>
-              <div className="map-route-track">
-                <div className="map-route-ticks" aria-hidden="true">
-                  {bookTrips.map((trip, index) => (
-                    <i
-                      className={
-                        index < visibleTrailStop - 1
-                          ? "passed"
-                          : index === visibleTrailStop - 1
-                            ? "current"
-                            : ""
-                      }
-                      key={trip.id}
-                    />
-                  ))}
-                </div>
-                <input
-                  className="map-route-range"
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={Math.round(mapScrollState.progress)}
-                  onChange={(event) =>
-                    setMemoryTrailProgress(Number(event.currentTarget.value))
-                  }
-                  disabled={!mapScrollState.hasOverflow}
-                  aria-label="Move along the family memory trail"
-                  aria-valuetext={
-                    mapScrollState.hasOverflow
-                      ? `Viewing stop ${visibleTrailStop} of ${bookTrips.length}`
-                      : `All ${bookTrips.length} stops are visible`
-                  }
-                  style={{
-                    "--route-progress": `${mapScrollState.progress}%`,
-                  } as CSSProperties}
-                />
-              </div>
-              <span className="map-route-note" aria-hidden="true">
-                drag the trail or use the arrows
-              </span>
-            </div>
-
-            <button
-              type="button"
-              className="map-route-step map-route-later"
-              onClick={() => scrollMemoryTrail(1)}
-              disabled={!mapScrollState.canGoLater}
-              aria-label="Show later stops on the memory trail"
-            >
-              <span aria-hidden="true">&rarr;</span>
-              <small>Later</small>
-            </button>
-          </div>
-        )}
+        <MemoryTrailControls
+          mapRef={adventureMapRef}
+          tripCount={bookTrips.length}
+        />
       </section>
 
       {activeTrip && (
@@ -1837,6 +1868,7 @@ export default function AdventureBook({
                               src={photo.url}
                               loading="lazy"
                               decoding="async"
+                              fetchPriority={relative === 0 ? "auto" : "low"}
                               alt={
                                 relative === 0
                                   ? familyMemoryAlt(activeTrip.title)

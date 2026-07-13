@@ -674,7 +674,6 @@ video {
   color: var(--blue);
   font-size: 42px;
   transform: rotate(-22deg);
-  animation: plane-float 4.8s ease-in-out infinite;
 }
 
 .paper-plane::after {
@@ -686,11 +685,6 @@ video {
   content: "";
   border-top: 2px dashed rgba(58, 134, 255, 0.55);
   border-radius: 50%;
-}
-
-@keyframes plane-float {
-  0%, 100% { transform: translate(0, 0) rotate(-22deg); }
-  50% { transform: translate(8px, -10px) rotate(-16deg); }
 }
 
 .ticker {
@@ -712,16 +706,11 @@ video {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.19em;
-  animation: ticker 35s linear infinite;
 }
 
 .ticker span {
   margin: 0 26px;
   color: var(--coral);
-}
-
-@keyframes ticker {
-  to { transform: translateX(-50%); }
 }
 
 .map-section,
@@ -3500,7 +3489,7 @@ video {
   border-radius: 50%;
   font-size: 31px;
   box-shadow: 5px 6px 0 rgba(24, 49, 83, 0.14);
-  animation: organizer-pulse 1.6s ease-in-out infinite;
+  animation: organizer-pulse 1.6s ease-in-out 3;
 }
 
 @keyframes organizer-pulse {

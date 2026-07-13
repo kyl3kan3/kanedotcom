@@ -222,6 +222,22 @@ test("approved trips power the cover, memory trail, chapter reader, and game", (
   assert.doesNotMatch(client, /baseVotes|1,842|example badges/i);
 });
 
+test("the adventure view bounds continuous rendering and media work", () => {
+  const client = read("app", "adventure-book.tsx");
+  const styles = read("app", "globals.css");
+
+  assert.match(client, /const\s+MemoryTrailControls\s*=\s*memo/);
+  assert.doesNotMatch(client, /const\s+\[mapScrollState/);
+  assert.match(client, /const\s+CHAPTER_PREVIEW_SCAN_LIMIT\s*=\s*6/);
+  assert.match(client, /const\s+CHAPTER_PREVIEW_IMAGE_LIMIT\s*=\s*3/);
+  assert.match(client, /\.slice\(0,\s*CHAPTER_PREVIEW_SCAN_LIMIT\)/);
+  assert.match(client, /if\s*\(memory\.kind\s*===\s*["']video["']\)\s*return true/);
+  assert.match(client, /fetchPriority=["']low["']/);
+  assert.match(client, /Math\.min\(3,\s*activeTrip\.photos\.length\)/);
+  assert.doesNotMatch(client, /preload=["']metadata["']/);
+  assert.doesNotMatch(styles, /animation:\s*(?:plane-float|ticker)[^;]*infinite/);
+});
+
 test("family photos open an accessible keyboard and touch gallery", () => {
   const client = read("app", "adventure-book.tsx");
   const styles = read("app", "globals.css");
