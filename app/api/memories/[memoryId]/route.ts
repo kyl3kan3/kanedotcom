@@ -3,13 +3,21 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { memories } from "@/db/schema";
 import { getFamilyContext } from "@/lib/family";
-import { getPrivateMemoryUrl } from "@/lib/memory-storage";
+import {
+  memoryRedirectCacheSeconds,
+  parseMemoryPreviewWidth,
+} from "@/lib/memory-preview";
+import {
+  getPrivateMemoryAccess,
+  getPrivateMemoryPreviewAccess,
+  type PrivateMemoryAccess,
+} from "@/lib/memory-storage";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ memoryId: string }> },
 ) {
   const { user, member } = await getFamilyContext();
@@ -24,7 +32,7 @@ export async function GET(
 
   const db = getDb();
   const [memory] = await db
-    .select({ storageKey: memories.storageKey })
+    .select({ kind: memories.kind, storageKey: memories.storageKey })
     .from(memories)
     .where(
       and(
@@ -41,9 +49,37 @@ export async function GET(
   }
 
   try {
-    const url = await getPrivateMemoryUrl(memory.storageKey);
-    const response = NextResponse.redirect(url, 307);
-    response.headers.set("Cache-Control", "private, max-age=240");
+    const previewWidth = parseMemoryPreviewWidth(
+      new URL(request.url).searchParams.get("width"),
+    );
+    const isPreview = previewWidth !== null && memory.kind === "image";
+    let servedPreview = false;
+    let access: PrivateMemoryAccess;
+    if (isPreview) {
+      try {
+        access = await getPrivateMemoryPreviewAccess(
+          memory.storageKey,
+          previewWidth,
+        );
+        servedPreview = true;
+      } catch {
+        access = await getPrivateMemoryAccess(memory.storageKey);
+      }
+    } else {
+      access = await getPrivateMemoryAccess(memory.storageKey);
+    }
+    const response = NextResponse.redirect(access.url, 307);
+    const remainingSeconds = memoryRedirectCacheSeconds(access.expiresAt);
+    response.headers.set(
+      "Cache-Control",
+      remainingSeconds > 0
+        ? `private, max-age=${remainingSeconds}`
+        : "private, no-store",
+    );
+    response.headers.set(
+      "X-Memory-Variant",
+      servedPreview ? "preview" : "original",
+    );
     response.headers.set("Vary", "Cookie");
     return response;
   } catch {

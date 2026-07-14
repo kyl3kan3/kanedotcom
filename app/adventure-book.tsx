@@ -29,6 +29,7 @@ import {
 } from "./photo-gallery-dialog";
 import { TripQuizCard } from "./trip-quiz-card";
 import { saveMemoryMetadata } from "./actions";
+import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 type GeneratedMemory = {
   id: string;
@@ -1185,21 +1186,25 @@ export default function AdventureBook({
             <div className="suitcase-clasp right" />
             <span className="suitcase-label">FAMILY<br />CARRY-ON</span>
           </div>
-          <div className="photo-fan" aria-hidden={!bookOpen}>
-            {heroPhotos.slice(0, 3).map((photo, index) => (
-              <figure
-                className={`fan-photo ${["fan-one", "fan-two", "fan-three"][index]}`}
-                key={photo.id}
-              >
-                <img
-                  src={photo.url}
-                  alt={familyMemoryAlt(photo.chapterTitle)}
-                  decoding="async"
-                />
-                <figcaption>{shortenTitle(photo.chapterTitle, 19).toUpperCase()}</figcaption>
-              </figure>
-            ))}
-          </div>
+          {bookOpen && (
+            <div className="photo-fan">
+              {heroPhotos.slice(0, 3).map((photo, index) => (
+                <figure
+                  className={`fan-photo ${["fan-one", "fan-two", "fan-three"][index]}`}
+                  key={photo.id}
+                >
+                  <img
+                    src={memoryPreviewUrl(photo.url, 480)}
+                    alt={familyMemoryAlt(photo.chapterTitle)}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                  />
+                  <figcaption>{shortenTitle(photo.chapterTitle, 19).toUpperCase()}</figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
           <div className="paper-plane" aria-hidden="true">➤</div>
         </div>
       </section>
@@ -1259,7 +1264,7 @@ export default function AdventureBook({
                     aria-label={`Open photo ${shelfPhotos.findIndex((photo) => photo.id === media.id) + 1} of ${shelfPhotos.length} from the family memory shelf`}
                   >
                     <img
-                      src={media.url}
+                      src={memoryPreviewUrl(media.url, 480)}
                       alt=""
                       loading="lazy"
                       decoding="async"
@@ -1364,7 +1369,11 @@ export default function AdventureBook({
                     controls
                     playsInline
                     preload="none"
-                    poster={activeTrip.photos[0]?.url}
+                    poster={
+                      activeTrip.photos[0]
+                        ? memoryPreviewUrl(activeTrip.photos[0].url, 480)
+                        : undefined
+                    }
                     aria-label={`${activeTrip.title} video memory`}
                     src={activeTrip.videos[0].url}
                   >
@@ -1730,7 +1739,14 @@ export default function AdventureBook({
                         <div className="trip-draft-collage" aria-hidden="true">
                           {draft.memories.slice(0, 3).map((memory) =>
                             memory.kind === "image" ? (
-                              <img key={memory.id} src={memory.url} alt="" loading="lazy" decoding="async" />
+                              <img
+                                key={memory.id}
+                                src={memoryPreviewUrl(memory.url, 480)}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                fetchPriority="low"
+                              />
                             ) : (
                               <span key={memory.id}>▶</span>
                             ),

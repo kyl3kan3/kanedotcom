@@ -1,4 +1,5 @@
 import { Providers } from "../providers";
+import "../auth-ui.css";
 
 export default function AuthLayout({
   children,

@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 type TrailPhoto = {
   id: string;
@@ -48,8 +49,7 @@ const MemoryTrailControls = memo(function MemoryTrailControls({
     if (!map || tripCount === 0) return;
 
     const updateScrollState = () => {
-      const maximumScroll = Math.max(0, map.scrollWidth - map.clientWidth);
-      maximumScrollRef.current = maximumScroll;
+      const maximumScroll = maximumScrollRef.current;
       const progress =
         maximumScroll > 1
           ? Math.round(
@@ -76,6 +76,14 @@ const MemoryTrailControls = memo(function MemoryTrailControls({
       );
     };
 
+    const measureScrollState = () => {
+      maximumScrollRef.current = Math.max(
+        0,
+        map.scrollWidth - map.clientWidth,
+      );
+      updateScrollState();
+    };
+
     let animationFrame = 0;
     const requestScrollUpdate = () => {
       if (animationFrame) return;
@@ -85,21 +93,21 @@ const MemoryTrailControls = memo(function MemoryTrailControls({
       });
     };
 
-    requestScrollUpdate();
+    measureScrollState();
     map.addEventListener("scroll", requestScrollUpdate, { passive: true });
-    window.addEventListener("resize", requestScrollUpdate);
+    window.addEventListener("resize", measureScrollState);
 
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(requestScrollUpdate);
+        : new ResizeObserver(measureScrollState);
     resizeObserver?.observe(map);
     const trail = map.querySelector(".memory-trail");
     if (trail) resizeObserver?.observe(trail);
 
     return () => {
       map.removeEventListener("scroll", requestScrollUpdate);
-      window.removeEventListener("resize", requestScrollUpdate);
+      window.removeEventListener("resize", measureScrollState);
       resizeObserver?.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
@@ -293,7 +301,7 @@ export const MemoryTrailSection = memo(function MemoryTrailSection({
                     {cover ? (
                       <img
                         className="memory-stop-cover"
-                        src={cover.url}
+                        src={memoryPreviewUrl(cover.url, 480)}
                         alt=""
                         loading="lazy"
                         decoding="async"

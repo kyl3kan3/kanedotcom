@@ -9,13 +9,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --test tests/source-contracts.test.mjs && node --import tsx --test tests/family-holidays.test.ts tests/proxy-server-action.test.ts",
+    "test": "npm run build && node --test tests/source-contracts.test.mjs && node --import tsx --test tests/family-holidays.test.ts tests/memory-preview.test.ts tests/proxy-server-action.test.ts",
     "lint": "eslint . --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "node db/seed.mjs",
     "repair:google-memory-mime": "node scripts/repair-google-memory-mime.mjs",
-    "backfill:memory-metadata": "node scripts/backfill-memory-metadata.mjs"
+    "backfill:memory-metadata": "node scripts/backfill-memory-metadata.mjs",
+    "backfill:memory-previews": "tsx scripts/backfill-memory-previews.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.83",

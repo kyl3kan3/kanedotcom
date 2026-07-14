@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { memo, useState } from "react";
+import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 const IMPORT_PREVIEW_BATCH = 12;
 
@@ -36,7 +37,7 @@ export const ImportPreviewGrid = memo(function ImportPreviewGrid({
           item.kind === "image" ? (
             <figure key={item.id}>
               <img
-                src={item.url}
+                src={memoryPreviewUrl(item.url, 480)}
                 alt="Imported family memory"
                 loading="lazy"
                 decoding="async"

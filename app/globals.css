@@ -1,9 +1,3 @@
-@import "tailwindcss";
-@import "@neondatabase/auth/ui/tailwind";
-@import "tw-animate-css";
-
-@custom-variant dark (&:is(.dark *));
-
 :root {
   --paper: #fff7e8;
   --paper-deep: #f3e5cf;
@@ -71,7 +65,7 @@ body {
     radial-gradient(circle at 86% 42%, rgba(58, 134, 255, 0.06), transparent 30rem),
     var(--paper);
   color: var(--ink);
-  font-family: "Nunito Sans", "Trebuchet MS", sans-serif;
+  font-family: var(--font-nunito-sans), "Trebuchet MS", sans-serif;
   text-rendering: optimizeLegibility;
 }
 
@@ -123,6 +117,113 @@ video {
   overflow: hidden;
 }
 
+.book-loading {
+  min-height: 100vh;
+  padding: 0 max(28px, calc((100vw - 1380px) / 2));
+  overflow: hidden;
+}
+
+.book-loading-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 94px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.book-loading-topbar > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.book-loading-topbar small {
+  font-family: var(--font-nunito-sans), sans-serif;
+  font-size: 7px;
+  letter-spacing: 0.22em;
+}
+
+.book-loading-mark {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  color: var(--paper);
+  background: var(--coral);
+  border-radius: 50%;
+}
+
+.book-loading-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
+  align-items: center;
+  gap: clamp(50px, 8vw, 120px);
+  min-height: calc(100vh - 94px);
+  padding: 70px 0;
+}
+
+.book-loading-kicker {
+  display: inline-block;
+  padding: 7px 11px;
+  background: var(--yellow);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.book-loading h1 {
+  margin: 28px 0 24px;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: clamp(55px, 7vw, 92px);
+  line-height: 0.94;
+  letter-spacing: -0.045em;
+}
+
+.book-loading h1 em {
+  color: var(--coral);
+  font-family: var(--font-caveat), cursive;
+}
+
+.book-loading p {
+  color: var(--muted-ink);
+  font-size: 17px;
+}
+
+.book-loading-bar {
+  display: block;
+  width: min(100%, 430px);
+  height: 8px;
+  margin-top: 34px;
+  overflow: hidden;
+  background: var(--paper-deep);
+  border-radius: 999px;
+}
+
+.book-loading-bar i {
+  display: block;
+  width: 62%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--coral), var(--yellow));
+  border-radius: inherit;
+}
+
+.book-loading-suitcase {
+  display: grid;
+  place-items: center;
+  min-height: 330px;
+  color: var(--ink);
+  background: #d29961;
+  border: 7px solid var(--ink);
+  border-radius: 35px;
+  box-shadow: 13px 17px 0 rgba(24, 49, 83, 0.09);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-align: center;
+}
+
 .memory-shelf-section,
 .generated-trips-section,
 .map-section,
@@ -156,7 +257,7 @@ video {
   color: var(--ink);
   line-height: 1;
   text-decoration: none;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 20px;
   font-weight: 800;
 }
@@ -176,7 +277,7 @@ video {
 
 .brand small {
   margin-top: 6px;
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--font-nunito-sans), sans-serif;
   font-size: 8px;
   letter-spacing: 0.25em;
   font-weight: 900;
@@ -271,7 +372,7 @@ video {
   color: #fff;
   background: var(--coral);
   border-radius: 50%;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 14px;
 }
 
@@ -353,7 +454,7 @@ video {
 .next-adventure h2,
 .import-dialog h2 {
   margin: 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-weight: 700;
   letter-spacing: -0.045em;
 }
@@ -367,7 +468,7 @@ video {
 .hero h1 em {
   position: relative;
   color: var(--coral);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-weight: 700;
   letter-spacing: -0.045em;
   white-space: nowrap;
@@ -457,7 +558,7 @@ video {
 .hero-note {
   margin: 34px 0 0 92px;
   color: var(--brown);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 20px;
   transform: rotate(-3deg);
 }
@@ -647,7 +748,6 @@ video {
   width: 100%;
   height: 215px;
   object-fit: cover;
-  filter: saturate(0.9) contrast(1.03);
 }
 
 .fan-photo figcaption {
@@ -656,7 +756,7 @@ video {
   left: 0;
   width: 100%;
   color: var(--ink);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 15px;
   text-align: center;
   font-weight: 700;
@@ -733,7 +833,7 @@ video {
   display: inline-block;
   margin-bottom: 5px;
   color: var(--coral);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 24px;
   font-weight: 700;
   transform: rotate(-2deg);
@@ -788,7 +888,7 @@ video {
   position: absolute;
   z-index: 0;
   color: rgba(24, 49, 83, 0.075);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 105px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -829,6 +929,8 @@ video {
 
 .memory-trail > li {
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
   scroll-snap-align: center;
 }
 
@@ -955,7 +1057,7 @@ video {
 
 .memory-stop-copy b {
   overflow: hidden;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 17px;
   line-height: 1.05;
   display: -webkit-box;
@@ -988,7 +1090,7 @@ video {
 
 .map-empty-state h3 {
   margin: 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(30px, 4vw, 45px);
   line-height: 1.05;
 }
@@ -1061,7 +1163,7 @@ video {
   background: var(--ink);
   border-radius: 50% 46% 52% 44%;
   box-shadow: 0 6px 0 rgba(24, 49, 83, 0.15);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 21px;
   font-weight: 800;
   line-height: 1;
@@ -1266,7 +1368,7 @@ video {
   margin-top: -3px;
   color: var(--coral);
   transform: rotate(-1deg);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 17px;
   font-weight: 700;
   line-height: 1;
@@ -1300,7 +1402,7 @@ video {
   top: 40px;
   right: max(32px, calc((100vw - 1280px) / 2));
   color: rgba(255, 255, 255, 0.055);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 280px;
   line-height: 1;
   font-weight: 800;
@@ -1359,7 +1461,7 @@ video {
 
 .chapter-facts {
   color: var(--trip-accent);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 19px;
 }
 
@@ -1485,7 +1587,7 @@ video {
   background: var(--trip-soft);
   border-radius: 4px;
   transform: rotate(1.2deg);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 28px;
   line-height: 1.25;
   font-weight: 700;
@@ -1514,7 +1616,7 @@ video {
 .chapter-side blockquote footer {
   margin-top: 16px;
   color: var(--muted-ink);
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--font-nunito-sans), sans-serif;
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1538,7 +1640,7 @@ video {
 
 .trip-stats > div:last-child { border-right: 0; }
 .trip-stats span { grid-row: span 2; font-size: 22px; }
-.trip-stats b { font-family: "Fraunces", Georgia, serif; font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
+.trip-stats b { font-family: var(--font-fraunces), Georgia, serif; font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
 .trip-stats small { color: rgba(255,255,255,0.55); font-size: 8px; font-weight: 800; }
 
 .video-postcard {
@@ -1577,13 +1679,13 @@ video {
   display: flex;
   justify-content: flex-end;
   margin: 12px 4px 0;
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 18px;
   font-weight: 700;
 }
 
 .video-postcard p span {
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--font-nunito-sans), sans-serif;
   font-size: 9px;
   letter-spacing: 0.12em;
 }
@@ -1695,7 +1797,7 @@ video {
 .quiz-card h3 {
   max-width: 550px;
   margin: 31px 0 28px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 34px;
   line-height: 1.15;
 }
@@ -1751,7 +1853,7 @@ video {
   min-height: 22px;
   margin-top: 18px;
   color: var(--muted-ink);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 18px;
   font-weight: 700;
 }
@@ -1846,7 +1948,7 @@ video {
   outline: 2px dashed var(--ink);
   outline-offset: 5px;
   border-radius: 50%;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 62px;
   font-weight: 700;
 }
@@ -1869,7 +1971,7 @@ video {
 .guide-card h3 {
   max-width: 250px;
   margin: 0 auto 7px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 25px;
   line-height: 1.1;
 }
@@ -1877,7 +1979,7 @@ video {
 .guide-card p {
   margin: 0 0 16px;
   color: var(--muted-ink);
-  font-family: "Caveat", cursive;
+  font-family: var(--font-caveat), cursive;
   font-size: 19px;
 }
 
@@ -1908,7 +2010,7 @@ video {
 
 .guide-stats dd {
   margin: 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 21px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -2018,7 +2120,7 @@ video {
   font-size: 21px;
 }
 
-.vote-options b { font-family: "Fraunces", Georgia, serif; font-size: 16px; }
+.vote-options b { font-family: var(--font-fraunces), Georgia, serif; font-size: 16px; }
 .vote-options small { color: var(--muted-ink); font-size: 9px; font-weight: 800; }
 .vote-options i { display: grid; place-items: center; width: 29px; height: 29px; background: var(--ink); color: #fff; border-radius: 50%; font-style: normal; }
 
@@ -2061,7 +2163,7 @@ video {
 
 .site-footer > p {
   margin: 0 auto 90px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(31px, 4vw, 53px);
   line-height: 1.2;
   letter-spacing: -0.025em;
@@ -2257,7 +2359,7 @@ video {
 
 .import-options b {
   margin: 20px 0 7px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 22px;
 }
 
@@ -2343,7 +2445,7 @@ video {
 
 .memory-shelf-heading h2 {
   margin: 7px 0 8px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(38px, 5vw, 66px);
   line-height: 0.98;
   letter-spacing: -0.045em;
@@ -2403,7 +2505,7 @@ video {
 
 .memory-preview-button img,
 .chapter-preview-button img {
-  transition-property: filter, transform;
+  transition-property: transform;
   transition-duration: 220ms;
   transition-timing-function: ease-out;
 }
@@ -2412,7 +2514,6 @@ video {
 .memory-preview-button:focus-visible img,
 .chapter-preview-button:hover img,
 .chapter-preview-button:focus-visible img {
-  filter: saturate(1.06);
   transform: scale(1.025);
 }
 
@@ -2432,9 +2533,8 @@ video {
   font-size: 18px;
   line-height: 1;
   opacity: 0;
-  filter: blur(4px);
   transform: scale(0.25);
-  transition-property: opacity, filter, transform;
+  transition-property: opacity, transform;
   transition-duration: 180ms;
   transition-timing-function: ease-out;
 }
@@ -2444,14 +2544,12 @@ video {
 .chapter-preview-button:hover .photo-open-badge,
 .chapter-preview-button:focus-visible .photo-open-badge {
   opacity: 1;
-  filter: blur(0);
   transform: scale(1);
 }
 
 @media (hover: none) {
   .photo-open-badge {
     opacity: 0.76;
-    filter: blur(0);
     transform: scale(0.88);
   }
 }
@@ -2581,7 +2679,7 @@ video {
 
 .google-setup h3 {
   margin: 0 0 11px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 32px;
 }
 
@@ -2680,7 +2778,7 @@ video {
   left: 32px;
   z-index: 1;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-weight: 800;
   text-decoration: none;
 }
@@ -2725,7 +2823,7 @@ video {
 .auth-intro h1,
 .access-card h1 {
   margin: 18px 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(39px, 5vw, 61px);
   line-height: 0.98;
 }
@@ -2844,7 +2942,7 @@ video {
 }
 
 .account-back {
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--font-nunito-sans), sans-serif;
   font-size: 12px;
 }
 
@@ -2892,7 +2990,7 @@ video {
 
 .family-access-heading h2 {
   margin: 8px 0 9px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(34px, 5vw, 49px);
   line-height: 1;
   letter-spacing: -0.035em;
@@ -3036,7 +3134,7 @@ video {
 
 .family-access-list-heading h3 {
   margin: 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 23px;
 }
 
@@ -3074,7 +3172,7 @@ video {
   background: var(--coral);
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: 20px;
   font-weight: 800;
 }
@@ -3269,7 +3367,7 @@ video {
 .generated-trips-heading h2 {
   max-width: 760px;
   margin: 6px 0 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(39px, 5vw, 67px);
   line-height: 0.98;
   letter-spacing: -0.045em;
@@ -3325,6 +3423,8 @@ video {
 
 .generated-trip-card {
   position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 520px;
   min-width: 0;
   padding: clamp(25px, 4vw, 42px);
   background: #fffdf8;
@@ -3363,7 +3463,7 @@ video {
 .generated-trip-title,
 .trip-draft-title {
   margin: 18px 0 10px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(27px, 3vw, 40px);
   font-weight: 800;
   line-height: 1.04;
@@ -3430,6 +3530,26 @@ video {
 
 .open-chapter-button:hover span { transform: translateX(4px); }
 
+.show-more-chapters {
+  display: block;
+  min-height: 48px;
+  margin: 38px auto 0;
+  padding: 10px 20px;
+  color: var(--ink);
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 4px 5px 0 rgba(24, 49, 83, 0.14);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.show-more-chapters span {
+  color: var(--muted-ink);
+  font-weight: 800;
+}
+
 .organizer-backdrop { z-index: 230; }
 
 .organizer-dialog {
@@ -3459,7 +3579,7 @@ video {
 .organizer-heading h2 {
   max-width: 760px;
   margin: 0 0 12px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(37px, 5vw, 61px);
   line-height: 0.98;
   letter-spacing: -0.045em;
@@ -3571,7 +3691,7 @@ video {
 .organizer-empty h3,
 .organizer-done h3 {
   margin: 15px 0 7px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), Georgia, serif;
   font-size: clamp(25px, 4vw, 38px);
   font-variant-numeric: tabular-nums;
 }
@@ -3673,6 +3793,8 @@ video {
 }
 
 @media (max-width: 900px) {
+  .book-loading-hero { grid-template-columns: 1fr; }
+  .book-loading-suitcase { display: none; }
   .generated-trips-heading { grid-template-columns: 1fr; gap: 18px; }
   .generated-trip-grid,
   .trip-draft-grid { grid-template-columns: 1fr; }

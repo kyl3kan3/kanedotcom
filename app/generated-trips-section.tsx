@@ -2,8 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { PhotoGallerySource } from "./photo-gallery-dialog";
+import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 type GeneratedTripMemory = PhotoGallerySource & {
   durationMs: number | null;
@@ -29,16 +30,12 @@ type GeneratedTripsSectionProps = {
   onSurprise: () => void;
 };
 
-const CHAPTER_PREVIEW_SCAN_LIMIT = 6;
-const CHAPTER_PREVIEW_IMAGE_LIMIT = 3;
+const CHAPTER_PREVIEW_LIMIT = 3;
+const INITIAL_VISIBLE_TRIPS = 4;
+const TRIP_PAGE_SIZE = 4;
 
 function chapterPreviewMemories(memories: GeneratedTripMemory[]) {
-  let imageCount = 0;
-  return memories.slice(0, CHAPTER_PREVIEW_SCAN_LIMIT).filter((memory) => {
-    if (memory.kind === "video") return true;
-    imageCount += 1;
-    return imageCount <= CHAPTER_PREVIEW_IMAGE_LIMIT;
-  });
+  return memories.slice(0, CHAPTER_PREVIEW_LIMIT);
 }
 
 export const GeneratedTripsSection = memo(function GeneratedTripsSection({
@@ -47,7 +44,12 @@ export const GeneratedTripsSection = memo(function GeneratedTripsSection({
   onSelectTrip,
   onSurprise,
 }: GeneratedTripsSectionProps) {
+  const [visibleTripCount, setVisibleTripCount] = useState(
+    INITIAL_VISIBLE_TRIPS,
+  );
   if (trips.length === 0) return null;
+  const visibleTrips = trips.slice(0, visibleTripCount);
+  const hiddenTripCount = Math.max(0, trips.length - visibleTrips.length);
 
   return (
     <section className="generated-trips-section" id="family-trip-chapters">
@@ -73,8 +75,8 @@ export const GeneratedTripsSection = memo(function GeneratedTripsSection({
           </button>
         </div>
       </div>
-      <div className="generated-trip-grid">
-        {trips.map((trip, tripIndex) => (
+      <div className="generated-trip-grid" id="generated-trip-grid">
+        {visibleTrips.map((trip, tripIndex) => (
           <article className="generated-trip-card" key={trip.id}>
             <div className="generated-trip-card-topline">
               <span>CHAPTER {String(tripIndex + 1).padStart(2, "0")}</span>
@@ -95,7 +97,7 @@ export const GeneratedTripsSection = memo(function GeneratedTripsSection({
                       aria-label={`Open photo ${trip.photos.findIndex((photo) => photo.id === memory.id) + 1} of ${trip.photos.length} from ${trip.title}`}
                     >
                       <img
-                        src={memory.url}
+                        src={memoryPreviewUrl(memory.url, 480)}
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -126,6 +128,21 @@ export const GeneratedTripsSection = memo(function GeneratedTripsSection({
           </article>
         ))}
       </div>
+      {hiddenTripCount > 0 && (
+        <button
+          type="button"
+          className="show-more-chapters"
+          aria-controls="generated-trip-grid"
+          onClick={() =>
+            setVisibleTripCount((current) =>
+              Math.min(current + TRIP_PAGE_SIZE, trips.length),
+            )
+          }
+        >
+          Show {Math.min(TRIP_PAGE_SIZE, hiddenTripCount)} more chapters
+          <span> ({hiddenTripCount} remaining)</span>
+        </button>
+      )}
     </section>
   );
 });

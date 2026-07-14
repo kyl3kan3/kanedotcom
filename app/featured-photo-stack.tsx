@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { memo, useState } from "react";
+import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 export type FeaturedPhoto = {
   id: string;
@@ -66,7 +67,7 @@ export const FeaturedPhotoStack = memo(function FeaturedPhotoStack({
                 tabIndex={relative === 0 ? 0 : -1}
               >
                 <img
-                  src={photo.url}
+                  src={memoryPreviewUrl(photo.url, 480)}
                   loading="lazy"
                   decoding="async"
                   fetchPriority={relative === 0 ? "auto" : "low"}

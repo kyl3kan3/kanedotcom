@@ -21,7 +21,12 @@ test("package scripts use the native Next.js runtime", () => {
   assert.equal(packageJson.scripts.start, "next start");
   assert.match(packageJson.scripts.test, /tests\/source-contracts\.test\.mjs/);
   assert.match(packageJson.scripts.test, /tests\/proxy-server-action\.test\.ts/);
+  assert.match(packageJson.scripts.test, /tests\/memory-preview\.test\.ts/);
   assert.match(packageJson.scripts["db:seed"], /db\/seed\.mjs/);
+  assert.match(
+    packageJson.scripts["backfill:memory-previews"],
+    /backfill-memory-previews\.ts/,
+  );
 
   for (const legacyPackage of [
     "vinext",
@@ -236,10 +241,10 @@ test("the adventure view bounds continuous rendering and media work", () => {
   assert.match(memoryTrail, /const\s+MemoryTrailControls\s*=\s*memo/);
   assert.doesNotMatch(memoryTrail, /const\s+\[mapScrollState/);
   assert.match(memoryTrail, /const\s+maximumScrollRef\s*=\s*useRef/);
-  assert.match(generatedTrips, /const\s+CHAPTER_PREVIEW_SCAN_LIMIT\s*=\s*6/);
-  assert.match(generatedTrips, /const\s+CHAPTER_PREVIEW_IMAGE_LIMIT\s*=\s*3/);
-  assert.match(generatedTrips, /\.slice\(0,\s*CHAPTER_PREVIEW_SCAN_LIMIT\)/);
-  assert.match(generatedTrips, /if\s*\(memory\.kind\s*===\s*["']video["']\)\s*return true/);
+  assert.match(generatedTrips, /const\s+CHAPTER_PREVIEW_LIMIT\s*=\s*3/);
+  assert.match(generatedTrips, /const\s+INITIAL_VISIBLE_TRIPS\s*=\s*4/);
+  assert.match(generatedTrips, /\.slice\(0,\s*CHAPTER_PREVIEW_LIMIT\)/);
+  assert.match(generatedTrips, /trips\.slice\(0,\s*visibleTripCount\)/);
   assert.match(generatedTrips, /fetchPriority=["']low["']/);
   assert.match(featuredPhotos, /Math\.min\(3,\s*photos\.length\)/);
   assert.match(client, /const\s+DEVICE_IMPORT_LIMIT\s*=\s*50/);
@@ -254,6 +259,49 @@ test("the adventure view bounds continuous rendering and media work", () => {
   assert.doesNotMatch(client, /importedMedia\.slice\(0,\s*60\)/);
   assert.doesNotMatch(client, /preload=["']metadata["']/);
   assert.doesNotMatch(styles, /animation:\s*(?:plane-float|ticker)[^;]*infinite/);
+});
+
+test("loading and scrolling use bounded private image previews", () => {
+  const client = read("app", "adventure-book.tsx");
+  const delivery = read("app", "api", "memories", "[memoryId]", "route.ts");
+  const featuredPhotos = read("app", "featured-photo-stack.tsx");
+  const generatedTrips = read("app", "generated-trips-section.tsx");
+  const layout = read("app", "layout.tsx");
+  const loading = read("app", "loading.tsx");
+  const memoryTrail = read("app", "memory-trail-section.tsx");
+  const preview = read("lib", "memory-preview.ts");
+  const storage = read("lib", "memory-storage.ts");
+  const styles = read("app", "globals.css");
+
+  assert.match(preview, /MEMORY_PREVIEW_WIDTHS\s*=\s*\[480\]/);
+  assert.match(delivery, /parseMemoryPreviewWidth/);
+  assert.match(delivery, /getPrivateMemoryPreviewAccess/);
+  assert.match(storage, /sharp\(originalBytes/);
+  assert.match(storage, /\.webp\(/);
+  assert.match(storage, /cacheControlMaxAge:\s*30\s*\*\s*24\s*\*\s*60\s*\*\s*60/);
+  assert.match(storage, /MAX_CONCURRENT_PREVIEW_GENERATIONS\s*=\s*2/);
+  assert.match(storage, /MAX_PREVIEW_SOURCE_BYTES/);
+  assert.match(storage, /PREVIEW_FAILURE_RETRY_MS/);
+  assert.match(storage, /privateMemoryPreviewFailures/);
+  assert.match(storage, /isPrivateMemoryPreviewCoolingDown/);
+  assert.match(storage, /del\(\[pathname,\s*\.\.\.previewPathnames\]\)/);
+  assert.match(delivery, /memoryRedirectCacheSeconds/);
+  assert.doesNotMatch(delivery, /stale-while-revalidate/);
+  assert.match(client, /bookOpen\s*&&\s*\(/);
+  assert.match(client, /memoryPreviewUrl\(photo\.url,\s*480\)/);
+  assert.match(featuredPhotos, /memoryPreviewUrl\(photo\.url/);
+  assert.match(generatedTrips, /memoryPreviewUrl\(memory\.url,\s*480\)/);
+  assert.match(memoryTrail, /memoryPreviewUrl\(cover\.url,\s*480\)/);
+  assert.match(memoryTrail, /const\s+measureScrollState/);
+  assert.match(
+    memoryTrail,
+    /const\s+updateScrollState\s*=\s*\(\)\s*=>\s*\{\s*const\s+maximumScroll\s*=\s*maximumScrollRef\.current/,
+  );
+  assert.match(styles, /\.generated-trip-card\s*\{[\s\S]*?content-visibility:\s*auto/);
+  assert.match(styles, /\.memory-trail\s*>\s*li\s*\{[\s\S]*?content-visibility:\s*auto/);
+  assert.match(layout, /from\s+["']next\/font\/google["']/);
+  assert.doesNotMatch(layout, /fonts\.googleapis\.com/);
+  assert.match(loading, /aria-busy=["']true["']/);
 });
 
 test("high-frequency controls keep interaction state outside the page root", () => {
@@ -365,8 +413,8 @@ test("Google Photos imports become permanent private family memories", () => {
   assert.match(importer, /\[google-photos-import\] import failed/);
   assert.match(delivery, /getFamilyContext\(\)/);
   assert.match(delivery, /eq\(memories\.familyId, member\.familyId\)/);
-  assert.match(delivery, /getPrivateMemoryUrl/);
-  assert.match(delivery, /private, max-age=240/);
+  assert.match(delivery, /getPrivateMemoryAccess/);
+  assert.match(delivery, /remainingSeconds/);
   assert.match(delivery, /["']Vary["'],\s*["']Cookie["']/);
   assert.match(repair, /isJpeg/);
   assert.match(repair, /mime_type = 'image\/jpeg'/);
