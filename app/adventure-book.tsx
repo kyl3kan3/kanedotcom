@@ -21,6 +21,7 @@ import {
 } from "./import-dialog-gate";
 import { ImportPreviewGrid } from "./import-preview-grid";
 import { MemoryTrailSection } from "./memory-trail-section";
+import { MotionAtmosphere } from "./motion-atmosphere";
 import { NextAdventureVote } from "./next-adventure-vote";
 import {
   PhotoGalleryDialog,
@@ -1116,6 +1117,7 @@ export default function AdventureBook({
 
   return (
     <main className="site-shell">
+      <MotionAtmosphere />
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Our family adventure book home">
           <span className="brand-mark" aria-hidden="true">✦</span>

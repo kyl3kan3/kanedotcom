@@ -113,8 +113,72 @@ video {
 }
 
 .site-shell {
+  position: relative;
   min-height: 100vh;
   overflow: hidden;
+  perspective: 1400px;
+}
+
+.motion-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 300;
+  width: calc(var(--page-scroll, 0) * 100%);
+  height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--coral), var(--yellow), var(--blue));
+  box-shadow: 0 2px 12px rgba(58, 134, 255, 0.24);
+  transform-origin: left center;
+}
+
+.motion-reveal {
+  opacity: 0;
+  filter: blur(5px);
+  transform: translate3d(0, 42px, -45px) rotateX(3deg);
+  transition-property: opacity, filter, transform;
+  transition-duration: 680ms;
+  transition-delay: calc(var(--reveal-order, 0) * 85ms);
+  transition-timing-function: cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+.motion-reveal.motion-visible {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0) rotateX(0);
+}
+
+.guide-card,
+.quiz-card,
+.generated-trip-card,
+.memory-preview-button,
+.next-adventure {
+  transform-style: preserve-3d;
+}
+
+.site-shell .guide-card.motion-tilting,
+.quiz-card.motion-tilting,
+.generated-trip-card.motion-tilting,
+.memory-preview-button.motion-tilting,
+.next-adventure.motion-tilting {
+  transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateY(-5px);
+  transition-property: transform, box-shadow;
+  transition-duration: 110ms;
+  transition-timing-function: ease-out;
+}
+
+.guide-card.motion-tilting::after,
+.quiz-card.motion-tilting::after,
+.generated-trip-card.motion-tilting::after,
+.next-adventure.motion-tilting::after {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  content: "";
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--tilt-glow-x) var(--tilt-glow-y), rgba(255, 255, 255, 0.24), transparent 38%);
+  mix-blend-mode: soft-light;
 }
 
 .book-loading {
@@ -419,6 +483,8 @@ video {
   position: relative;
   z-index: 5;
   padding: 35px 0 0 4px;
+  transform: translate3d(0, calc(var(--hero-scroll, 0) * -34px), calc(var(--hero-scroll, 0) * 55px));
+  opacity: calc(1 - var(--hero-scroll, 0) * 0.46);
 }
 
 .eyebrow {
@@ -576,6 +642,9 @@ video {
   width: min(100%, 690px);
   height: 610px;
   isolation: isolate;
+  perspective: 1100px;
+  transform: translate3d(0, calc(var(--hero-scroll, 0) * 45px), calc(var(--hero-scroll, 0) * 115px)) rotateX(calc(var(--hero-scroll, 0) * 5deg)) rotateY(calc(var(--hero-scroll, 0) * -4deg));
+  transform-style: preserve-3d;
 }
 
 .sun-doodle {
@@ -586,7 +655,7 @@ video {
   color: var(--yellow);
   font-size: 98px;
   line-height: 1;
-  transform: rotate(13deg);
+  transform: translate3d(calc(var(--hero-scroll, 0) * 25px), calc(var(--hero-scroll, 0) * -46px), 80px) rotate(calc(13deg + var(--hero-scroll, 0) * 34deg));
   filter: drop-shadow(0 6px 0 rgba(24, 49, 83, 0.06));
 }
 
@@ -598,6 +667,7 @@ video {
   background: #cb8b55;
   border: 7px solid var(--ink);
   box-shadow: 13px 17px 0 rgba(24, 49, 83, 0.09);
+  transform-style: preserve-3d;
 }
 
 .suitcase-base {
@@ -609,6 +679,7 @@ video {
     linear-gradient(90deg, transparent 8%, rgba(115, 68, 37, 0.22) 8.5%, transparent 10%),
     linear-gradient(90deg, transparent 88%, rgba(115, 68, 37, 0.22) 88.5%, transparent 90%),
     #c98c57;
+  transform: translateZ(18px);
 }
 
 .suitcase-lid {
@@ -618,7 +689,9 @@ video {
   overflow: hidden;
   border-radius: 35px 35px 20px 20px;
   transform-origin: 50% 100%;
-  transition: transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-property: transform, box-shadow;
+  transition-duration: 650ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   background:
     linear-gradient(90deg, transparent 8%, rgba(115, 68, 37, 0.2) 8.5%, transparent 10%),
     linear-gradient(90deg, transparent 88%, rgba(115, 68, 37, 0.2) 88.5%, transparent 90%),
@@ -626,7 +699,8 @@ video {
 }
 
 .book-is-open .suitcase-lid {
-  transform: translate(-18px, -85px) rotate(-7deg);
+  transform: translate3d(-18px, -85px, 75px) rotateX(-9deg) rotateZ(-7deg);
+  box-shadow: 22px 30px 30px rgba(24, 49, 83, 0.14);
 }
 
 .suitcase-handle {
@@ -726,13 +800,17 @@ video {
   inset: 65px 0 170px 0;
   z-index: 4;
   opacity: 0;
-  transform: translateY(120px) scale(0.82);
-  transition: transform 750ms 180ms cubic-bezier(0.18, 0.9, 0.22, 1.15), opacity 320ms 160ms ease;
+  transform: translate3d(0, 120px, -70px) rotateX(7deg) scale(0.82);
+  transform-style: preserve-3d;
+  transition-property: transform, opacity;
+  transition-duration: 750ms, 320ms;
+  transition-delay: 180ms, 160ms;
+  transition-timing-function: cubic-bezier(0.18, 0.9, 0.22, 1), ease;
 }
 
 .book-is-open .photo-fan {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translate3d(0, 0, 95px) rotateX(0) scale(1);
 }
 
 .fan-photo {
@@ -1481,6 +1559,8 @@ video {
 .photo-stack {
   position: relative;
   height: 580px;
+  perspective: 1000px;
+  transform-style: preserve-3d;
 }
 
 .stack-photo {
@@ -1495,7 +1575,11 @@ video {
   border: 0;
   cursor: pointer;
   box-shadow: 0 30px 55px rgba(4, 18, 33, 0.38);
-  transition: transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 250ms ease;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  transition-property: transform, opacity, box-shadow;
+  transition-duration: 420ms, 250ms, 280ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1), ease, ease-out;
 }
 
 .stack-photo img {
@@ -1506,15 +1590,15 @@ video {
   outline-offset: -1px;
 }
 
-.stack-position-0 { z-index: 4; transform: rotate(-2deg); }
-.stack-position-0:hover { transform: translateY(-6px) rotate(-1deg); }
-.stack-position-1 { z-index: 3; transform: translate(55px, 25px) rotate(4deg); }
-.stack-position-2 { z-index: 2; transform: translate(25px, 42px) rotate(-6deg); }
+.stack-position-0 { z-index: 4; transform: translate3d(0, 0, 54px) rotateZ(-2deg); }
+.stack-position-0:hover { transform: translate3d(0, -8px, 76px) rotateX(1deg) rotateZ(-1deg); box-shadow: 0 38px 65px rgba(4, 18, 33, 0.44); }
+.stack-position-1 { z-index: 3; transform: translate3d(55px, 25px, 12px) rotateY(-2deg) rotateZ(4deg); }
+.stack-position-2 { z-index: 2; transform: translate3d(25px, 42px, -26px) rotateY(3deg) rotateZ(-6deg); }
 .stack-position-hidden {
   z-index: 1;
   opacity: 0;
   pointer-events: none;
-  transform: translate(12px, 48px) rotate(-3deg) scale(0.98);
+  transform: translate3d(12px, 48px, -70px) rotateY(5deg) rotateZ(-3deg) scale(0.98);
 }
 
 .photo-controls {
