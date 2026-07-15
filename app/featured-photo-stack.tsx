@@ -9,6 +9,7 @@ export type FeaturedPhoto = {
   id: string;
   kind: "image" | "video";
   url: string;
+  previewUrl?: string;
   durationMs: number | null;
 };
 
@@ -67,7 +68,7 @@ export const FeaturedPhotoStack = memo(function FeaturedPhotoStack({
                 tabIndex={relative === 0 ? 0 : -1}
               >
                 <img
-                  src={memoryPreviewUrl(photo.url, 480)}
+                  src={photo.previewUrl ?? memoryPreviewUrl(photo.url, 480)}
                   loading="lazy"
                   decoding="async"
                   fetchPriority={relative === 0 ? "auto" : "low"}

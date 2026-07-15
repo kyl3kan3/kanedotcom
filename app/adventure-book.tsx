@@ -36,6 +36,7 @@ type GeneratedMemory = {
   id: string;
   kind: "image" | "video";
   url: string;
+  previewUrl?: string;
   durationMs: number | null;
 };
 
@@ -160,6 +161,7 @@ type ImportedMedia = {
   id: string;
   name: string;
   url: string;
+  previewUrl?: string;
   kind: "image" | "video";
   mimeType: string;
   source?: "device" | "google_photos";
@@ -1196,7 +1198,7 @@ export default function AdventureBook({
                   key={photo.id}
                 >
                   <img
-                    src={memoryPreviewUrl(photo.url, 480)}
+                    src={photo.previewUrl ?? memoryPreviewUrl(photo.url, 480)}
                     alt={familyMemoryAlt(photo.chapterTitle)}
                     loading="lazy"
                     decoding="async"
@@ -1266,7 +1268,7 @@ export default function AdventureBook({
                     aria-label={`Open photo ${shelfPhotos.findIndex((photo) => photo.id === media.id) + 1} of ${shelfPhotos.length} from the family memory shelf`}
                   >
                     <img
-                      src={memoryPreviewUrl(media.url, 480)}
+                      src={media.previewUrl ?? memoryPreviewUrl(media.url, 480)}
                       alt=""
                       loading="lazy"
                       decoding="async"
@@ -1373,7 +1375,8 @@ export default function AdventureBook({
                     preload="none"
                     poster={
                       activeTrip.photos[0]
-                        ? memoryPreviewUrl(activeTrip.photos[0].url, 480)
+                        ? activeTrip.photos[0].previewUrl ??
+                          memoryPreviewUrl(activeTrip.photos[0].url, 480)
                         : undefined
                     }
                     aria-label={`${activeTrip.title} video memory`}

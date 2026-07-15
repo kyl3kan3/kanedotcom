@@ -12,7 +12,6 @@ const REVEAL_GROUPS = [
 ];
 
 const REVEAL_ITEMS = [
-  ".memory-preview-button",
   ".memory-stop",
   ".chapter-grid > *",
   ".passport-progress li",
@@ -25,7 +24,6 @@ const TILT_SELECTOR = [
   ".guide-card",
   ".quiz-card",
   ".generated-trip-card",
-  ".memory-preview-button",
   ".next-adventure",
 ].join(",");
 

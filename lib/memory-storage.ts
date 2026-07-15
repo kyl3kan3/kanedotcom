@@ -133,7 +133,7 @@ export async function copyGoogleMediaToPrivateBlob({
     kind === "video" ||
     (Number.isFinite(contentLength) && contentLength > 100 * 1024 * 1024);
 
-  return put(storedPathname, upstream.body, {
+  const blob = await put(storedPathname, upstream.body, {
     access: "private",
     abortSignal,
     allowOverwrite: false,
@@ -141,6 +141,25 @@ export async function copyGoogleMediaToPrivateBlob({
     contentType: upstreamMimeType,
     multipart: useMultipart,
   });
+
+  if (kind === "image") {
+    const previewResults = await Promise.allSettled(
+      MEMORY_PREVIEW_WIDTHS.map((width) =>
+        ensurePrivateMemoryPreview(blob.pathname, width),
+      ),
+    );
+    if (previewResults.some((result) => result.status === "rejected")) {
+      console.warn(
+        JSON.stringify({
+          level: "warning",
+          message: "memory preview preparation deferred",
+          source: "google_photos_import",
+        }),
+      );
+    }
+  }
+
+  return blob;
 }
 
 export async function deletePrivateMemoryBlob(pathname: string) {

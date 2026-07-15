@@ -12,12 +12,63 @@ import {
 } from "@/db/schema";
 import { getFamilyContext } from "@/lib/family";
 import { normalizeFamilyTripPresentation } from "@/lib/family-holidays";
+import { getPrivateMemoryPreviewUrl } from "@/lib/memory-storage";
 import { NEXT_ADVENTURE_ROUND_SLUG } from "@/lib/next-adventure";
 
 export const dynamic = "force-dynamic";
 
+const INITIAL_MEMORY_SHELF_PREVIEWS = 8;
+const INITIAL_VISIBLE_TRIPS = 4;
+const CHAPTER_PREVIEW_LIMIT = 3;
+
+type PreviewCandidate = {
+  id: string;
+  kind: "image" | "video";
+  storageKey: string | null;
+};
+
+function runtimeNow() {
+  return Date.now();
+}
+
+async function resolveCriticalPreviewUrls(candidates: PreviewCandidate[]) {
+  const uniqueCandidates = new Map(
+    candidates.flatMap((candidate) =>
+      candidate.kind === "image" && candidate.storageKey
+        ? [[candidate.id, candidate.storageKey] as const]
+        : [],
+    ),
+  );
+  const previewUrls = new Map<string, string>();
+  const queue = [...uniqueCandidates];
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(6, queue.length) },
+      async () => {
+        while (cursor < queue.length) {
+          const [id, storageKey] = queue[cursor++];
+          try {
+            previewUrls.set(
+              id,
+              await getPrivateMemoryPreviewUrl(storageKey, 480),
+            );
+          } catch {
+            // The authenticated per-memory route remains the safe fallback.
+          }
+        }
+      },
+    ),
+  );
+
+  return previewUrls;
+}
+
 export default async function Home() {
+  const startedAt = runtimeNow();
   const { user, member, verificationRequired } = await getFamilyContext();
+  const authMs = runtimeNow() - startedAt;
 
   if (!user) redirect("/auth/sign-in");
 
@@ -59,6 +110,7 @@ export default async function Home() {
   }
 
   const db = getDb();
+  const dataStartedAt = runtimeNow();
   const [
     stampRows,
     voteRows,
@@ -119,6 +171,7 @@ export default async function Home() {
         name: memories.originalName,
         kind: memories.kind,
         mimeType: memories.mimeType,
+        storageKey: memories.storageKey,
       })
       .from(memories)
       .where(
@@ -136,6 +189,7 @@ export default async function Home() {
         tripId: trips.id,
         memoryId: memories.id,
         memoryKind: memories.kind,
+        memoryStorageKey: memories.storageKey,
         memoryCapturedAt: memories.capturedAt,
         memoryDurationMs: memories.durationMs,
       })
@@ -211,6 +265,7 @@ export default async function Home() {
       )
       .groupBy(tripStamps.memberId),
   ]);
+  const dataMs = runtimeNow() - dataStartedAt;
 
   const memoryCountsByMember = new Map(
     crewMemoryRows.flatMap((row) =>
@@ -229,6 +284,7 @@ export default async function Home() {
         id: string;
         kind: "image" | "video";
         url: string;
+        storageKey: string | null;
         capturedAt: string | null;
         durationMs: number | null;
       }>;
@@ -245,6 +301,7 @@ export default async function Home() {
         id: row.memoryId,
         kind: row.memoryKind,
         url: `/api/memories/${row.memoryId}`,
+        storageKey: row.memoryStorageKey,
         capturedAt: row.memoryCapturedAt?.toISOString() ?? null,
         durationMs: row.memoryDurationMs,
       });
@@ -252,7 +309,33 @@ export default async function Home() {
     generatedTrips.set(row.tripId, trip);
   }
 
-  const approvedTrips = [...generatedTrips.values()].map((trip) => {
+  const generatedTripList = [...generatedTrips.values()];
+  const criticalCandidates: PreviewCandidate[] = readyMemoryRows.slice(
+    0,
+    INITIAL_MEMORY_SHELF_PREVIEWS,
+  );
+
+  generatedTripList.forEach((trip, tripIndex) => {
+    if (tripIndex < INITIAL_VISIBLE_TRIPS) {
+      criticalCandidates.push(
+        ...trip.memories.slice(0, CHAPTER_PREVIEW_LIMIT),
+      );
+    }
+
+    const photos = trip.memories.filter((memory) => memory.kind === "image");
+    if (photos[0]) criticalCandidates.push(photos[0]);
+    if (tripIndex === 0) {
+      criticalCandidates.push(...photos.slice(0, 3));
+    }
+  });
+
+  const previewStartedAt = runtimeNow();
+  const criticalPreviewUrls = await resolveCriticalPreviewUrls(
+    criticalCandidates,
+  );
+  const previewMs = runtimeNow() - previewStartedAt;
+
+  const approvedTrips = generatedTripList.map((trip) => {
     const presentation = normalizeFamilyTripPresentation(
       trip.memories.map((memory) => ({
         kind: memory.kind,
@@ -269,10 +352,26 @@ export default async function Home() {
         id: memory.id,
         kind: memory.kind,
         url: memory.url,
+        previewUrl: criticalPreviewUrls.get(memory.id),
         durationMs: memory.durationMs,
       })),
     };
   });
+
+  console.info(
+    JSON.stringify({
+      level: "info",
+      message: "home render ready",
+      route: "/",
+      authMs,
+      dataMs,
+      previewMs,
+      totalMs: runtimeNow() - startedAt,
+      criticalPreviewCount: criticalPreviewUrls.size,
+      memoryPayloadCount: readyMemoryRows.length,
+      tripCount: approvedTrips.length,
+    }),
+  );
 
   return (
     <AdventureBook
@@ -293,6 +392,7 @@ export default async function Home() {
         ...memory,
         source: "google_photos" as const,
         url: `/api/memories/${memory.id}`,
+        previewUrl: criticalPreviewUrls.get(memory.id),
       }))}
       generatedTrips={approvedTrips}
       savedMemoryCount={memoryCountRows[0]?.total ?? 0}

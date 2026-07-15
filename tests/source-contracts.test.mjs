@@ -304,6 +304,25 @@ test("loading and scrolling use bounded private image previews", () => {
   assert.match(loading, /aria-busy=["']true["']/);
 });
 
+test("critical private previews bypass the per-image serverless waterfall", () => {
+  const page = read("app", "page.tsx");
+  const client = read("app", "adventure-book.tsx");
+  const storage = read("lib", "memory-storage.ts");
+  const motion = read("app", "motion-atmosphere.tsx");
+  const styles = read("app", "globals.css");
+
+  assert.match(page, /getPrivateMemoryPreviewUrl/);
+  assert.match(page, /previewUrl:\s*criticalPreviewUrls\.get/);
+  assert.match(page, /criticalPreviewCount/);
+  assert.match(client, /previewUrl\s*\?\?\s*memoryPreviewUrl/);
+  assert.match(storage, /ensurePrivateMemoryPreview\(blob\.pathname,\s*width\)/);
+  assert.doesNotMatch(motion, /["']\.memory-preview-button["']/);
+  assert.doesNotMatch(
+    styles,
+    /\.site-shell\s*\{[^}]*perspective:/,
+  );
+});
+
 test("high-frequency controls keep interaction state outside the page root", () => {
   const client = read("app", "adventure-book.tsx");
   const featuredPhotos = read("app", "featured-photo-stack.tsx");

@@ -15,6 +15,7 @@ import { memoryPreviewUrl } from "@/lib/memory-preview";
 type TrailPhoto = {
   id: string;
   url: string;
+  previewUrl?: string;
 };
 
 export type MemoryTrailTrip = {
@@ -301,7 +302,7 @@ export const MemoryTrailSection = memo(function MemoryTrailSection({
                     {cover ? (
                       <img
                         className="memory-stop-cover"
-                        src={memoryPreviewUrl(cover.url, 480)}
+                        src={cover.previewUrl ?? memoryPreviewUrl(cover.url, 480)}
                         alt=""
                         loading="lazy"
                         decoding="async"

@@ -8,6 +8,7 @@ import { memoryPreviewUrl } from "@/lib/memory-preview";
 
 type GeneratedTripMemory = PhotoGallerySource & {
   durationMs: number | null;
+  previewUrl?: string;
 };
 
 export type GeneratedTripCard = {
@@ -97,7 +98,7 @@ export const GeneratedTripsSection = memo(function GeneratedTripsSection({
                       aria-label={`Open photo ${trip.photos.findIndex((photo) => photo.id === memory.id) + 1} of ${trip.photos.length} from ${trip.title}`}
                     >
                       <img
-                        src={memoryPreviewUrl(memory.url, 480)}
+                        src={memory.previewUrl ?? memoryPreviewUrl(memory.url, 480)}
                         alt=""
                         loading="lazy"
                         decoding="async"

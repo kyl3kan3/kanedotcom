@@ -116,7 +116,6 @@ video {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  perspective: 1400px;
 }
 
 .motion-progress {
@@ -151,7 +150,6 @@ video {
 .guide-card,
 .quiz-card,
 .generated-trip-card,
-.memory-preview-button,
 .next-adventure {
   transform-style: preserve-3d;
 }
@@ -159,7 +157,6 @@ video {
 .site-shell .guide-card.motion-tilting,
 .quiz-card.motion-tilting,
 .generated-trip-card.motion-tilting,
-.memory-preview-button.motion-tilting,
 .next-adventure.motion-tilting {
   transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateY(-5px);
   transition-property: transform, box-shadow;

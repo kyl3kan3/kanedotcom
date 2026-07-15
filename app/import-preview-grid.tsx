@@ -11,6 +11,7 @@ export type ImportPreviewMedia = {
   id: string;
   kind: "image" | "video";
   url: string;
+  previewUrl?: string;
 };
 
 type ImportPreviewGridProps = {
@@ -37,7 +38,7 @@ export const ImportPreviewGrid = memo(function ImportPreviewGrid({
           item.kind === "image" ? (
             <figure key={item.id}>
               <img
-                src={memoryPreviewUrl(item.url, 480)}
+                src={item.previewUrl ?? memoryPreviewUrl(item.url, 480)}
                 alt="Imported family memory"
                 loading="lazy"
                 decoding="async"
