@@ -53,6 +53,61 @@ const monthName = new Intl.DateTimeFormat("en-US", {
   month: "long",
 });
 
+const familyClockParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: FAMILY_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+export type WallClockTime = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+function familyTimeZoneOffsetMs(instant: Date) {
+  const parts = Object.fromEntries(
+    familyClockParts
+      .formatToParts(instant)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const reprojected = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour % 24,
+    parts.minute,
+    parts.second,
+  );
+  return reprojected - instant.getTime();
+}
+
+// Interpret a zone-less wall-clock reading (like an EXIF DateTimeOriginal) as
+// family-local time and return the UTC instant it names. Two rounds converge
+// across DST transitions.
+export function familyWallTimeToInstant(wall: WallClockTime): Date {
+  const asUtc = Date.UTC(
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
+  );
+  let instant = asUtc - familyTimeZoneOffsetMs(new Date(asUtc));
+  instant = asUtc - familyTimeZoneOffsetMs(new Date(instant));
+  return new Date(instant);
+}
+
 function validDate(value: Date | string | null | undefined) {
   const date = value instanceof Date ? value : value ? new Date(value) : null;
   return date &&

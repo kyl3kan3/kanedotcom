@@ -16,6 +16,15 @@ import {
 
 type MemoryKind = "image" | "video";
 
+// A failure that will repeat identically on every retry of the same picker
+// page (relisting refreshes baseUrls, so transient 401/403/5xx stay retryable).
+export class PermanentMemoryImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermanentMemoryImportError";
+  }
+}
+
 function safePathSegment(value: string, fallback: string) {
   const cleaned = value
     .normalize("NFKD")
@@ -69,6 +78,11 @@ export function getGoogleMemoryDirectory(familyId: string, itemId: string) {
   return `families/${familyId}/google-photos/${googleItemPathSegment(itemId)}/`;
 }
 
+// base64url output can contain "_", a single-character LIKE wildcard.
+export function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 export function getGoogleMemoryPathname(
   familyId: string,
   itemId: string,
@@ -103,7 +117,9 @@ export async function copyGoogleMediaToPrivateBlob({
 }) {
   const googleUrl = new URL(baseUrl);
   if (!isAllowedGoogleMediaUrl(googleUrl)) {
-    throw new Error("Google returned an unsupported media URL.");
+    throw new PermanentMemoryImportError(
+      "Google returned an unsupported media URL.",
+    );
   }
 
   const downloadUrl = `${googleUrl.toString()}${kind === "video" ? "=dv" : "=d"}`;
@@ -120,7 +136,9 @@ export async function copyGoogleMediaToPrivateBlob({
     upstream.headers.get("content-type") || mimeType,
   );
   if (!upstreamMimeType.startsWith(`${kind}/`)) {
-    throw new Error("Google returned media in an unexpected format.");
+    throw new PermanentMemoryImportError(
+      "Google returned media in an unexpected format.",
+    );
   }
 
   const storedPathname = normalizeGoogleMediaFilename(

@@ -327,6 +327,8 @@ export default function AdventureBook({
     [],
   );
   const objectUrlsRef = useRef<string[]>([]);
+  const organizerDialogRef = useRef<HTMLDivElement | null>(null);
+  const organizerCloseRef = useRef<HTMLButtonElement | null>(null);
   const googlePollTimerRef = useRef<number | null>(null);
   const googlePollExpiryTimerRef = useRef<number | null>(null);
   const googlePollActiveSessionRef = useRef<string | null>(null);
@@ -480,14 +482,51 @@ export default function AdventureBook({
 
   useEffect(() => {
     if (!organizerOpen) return;
+
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() =>
+      organizerCloseRef.current?.focus(),
+    );
+
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        const focusable = Array.from(
+          organizerDialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+          ) ?? [],
+        );
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
       if (event.key === "Escape") {
         if (document.querySelector("[data-photo-gallery-open]")) return;
         setOrganizerOpen(false);
       }
     };
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus({ preventScroll: true });
+    };
   }, [organizerOpen]);
 
   const selectTrip = useCallback((tripId: string) => {
@@ -1031,7 +1070,10 @@ export default function AdventureBook({
       setGoogleMessage("Google Photos opened in a new tab. Pick up to 500 memories; selected media will stream server-to-server into private permanent copies.");
       if (pickerWindow && !pickerWindow.closed) {
         pickerWindow.location.href = result.pickerUri;
-        googlePollExpiryTimerRef.current = null;
+        if (googlePollExpiryTimerRef.current !== null) {
+          window.clearTimeout(googlePollExpiryTimerRef.current);
+          googlePollExpiryTimerRef.current = null;
+        }
         googlePollActiveSessionRef.current = null;
         pollGooglePhotosSession(
           result.id,
@@ -1084,11 +1126,11 @@ export default function AdventureBook({
         : `${files.length} ${files.length === 1 ? "memory is" : "memories are"} ready to preview.`,
     );
 
-    const media: ImportedMedia[] = files.map((file, index) => {
+    const media: ImportedMedia[] = files.map((file) => {
       const url = URL.createObjectURL(file);
       objectUrlsRef.current.push(url);
       return {
-        id: `${file.name}-${file.lastModified}-${index}`,
+        id: crypto.randomUUID(),
         name: file.name,
         url,
         kind: file.type.startsWith("video/") ? "video" : "image",
@@ -1656,6 +1698,7 @@ export default function AdventureBook({
           onMouseDown={() => setOrganizerOpen(false)}
         >
           <div
+            ref={organizerDialogRef}
             className="organizer-dialog"
             role="dialog"
             aria-modal="true"
@@ -1670,6 +1713,7 @@ export default function AdventureBook({
             onMouseDown={(event) => event.stopPropagation()}
           >
             <button
+              ref={organizerCloseRef}
               className="dialog-close"
               onClick={() => setOrganizerOpen(false)}
               aria-label="Close AI memory organizer"

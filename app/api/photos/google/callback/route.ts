@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  GOOGLE_PHOTOS_COOKIE_PATH,
   GOOGLE_PHOTOS_STATE_COOKIE,
   GOOGLE_PHOTOS_TOKEN_COOKIE,
   getCookieOptions,
@@ -63,15 +64,24 @@ export async function GET(request: Request) {
     });
     token = (await tokenResponse.json()) as GoogleTokenResponse;
     if (!tokenResponse.ok || !token.access_token) {
-      cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
+      cookieStore.delete({
+        name: GOOGLE_PHOTOS_STATE_COOKIE,
+        path: GOOGLE_PHOTOS_COOKIE_PATH,
+      });
       return redirectThroughSameSite(request, "error");
     }
   } catch {
-    cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
+    cookieStore.delete({
+      name: GOOGLE_PHOTOS_STATE_COOKIE,
+      path: GOOGLE_PHOTOS_COOKIE_PATH,
+    });
     return redirectThroughSameSite(request, "error");
   }
 
-  cookieStore.delete(GOOGLE_PHOTOS_STATE_COOKIE);
+  cookieStore.delete({
+    name: GOOGLE_PHOTOS_STATE_COOKIE,
+    path: GOOGLE_PHOTOS_COOKIE_PATH,
+  });
   cookieStore.set(
     GOOGLE_PHOTOS_TOKEN_COOKIE,
     token.access_token,
