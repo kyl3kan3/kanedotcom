@@ -22,6 +22,7 @@ import {
 import { ImportPreviewGrid } from "./import-preview-grid";
 import { MemoryTrailSection } from "./memory-trail-section";
 import { MotionAtmosphere } from "./motion-atmosphere";
+import { MotionFlourish } from "./motion-flourish";
 import { NextAdventureVote } from "./next-adventure-vote";
 import {
   PhotoGalleryDialog,
@@ -1120,6 +1121,7 @@ export default function AdventureBook({
   return (
     <main className="site-shell">
       <MotionAtmosphere />
+      <MotionFlourish />
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Our family adventure book home">
           <span className="brand-mark" aria-hidden="true">✦</span>
@@ -1150,7 +1152,16 @@ export default function AdventureBook({
             <span>EST. FOREVER</span><i />
             {savedMetadataCount} REAL MEMORIES
           </div>
-          <h1>Our great big<br /><em>adventure book</em></h1>
+          <h1>
+            <span className="word" style={{ "--word-index": 0 } as CSSProperties}>Our</span>{" "}
+            <span className="word" style={{ "--word-index": 1 } as CSSProperties}>great</span>{" "}
+            <span className="word" style={{ "--word-index": 2 } as CSSProperties}>big</span>
+            <br />
+            <em>
+              <span className="word" style={{ "--word-index": 3 } as CSSProperties}>adventure</span>{" "}
+              <span className="word" style={{ "--word-index": 4 } as CSSProperties}>book</span>
+            </em>
+          </h1>
           <p>
             Places we went. Things we tried. Stories we never want to forget.
             Open the suitcase and follow the real chapters we have made together.
@@ -1173,7 +1184,7 @@ export default function AdventureBook({
           </div>
         </div>
 
-        <div className="suitcase-scene" aria-label="A scrapbook collage of family adventures">
+        <div className="suitcase-scene" data-ambient aria-label="A scrapbook collage of family adventures">
           <div className="sun-doodle" aria-hidden="true">☀</div>
           <div className="suitcase-lid">
             <span className="sticker sticker-one">
@@ -1213,7 +1224,7 @@ export default function AdventureBook({
         </div>
       </section>
 
-      <div className="ticker" aria-hidden="true">
+      <div className="ticker" data-ambient aria-hidden="true">
         <div>
           <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS
           <span>★</span> {bookTrips.length} REAL CHAPTERS <span>★</span> {photoCount} PHOTOS <span>★</span> {videoCount} VIDEOS <span>★</span> ENDLESS SNACKS

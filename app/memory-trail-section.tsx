@@ -272,6 +272,7 @@ export const MemoryTrailSection = memo(function MemoryTrailSection({
 
       <div
         className="adventure-map"
+        data-ambient
         ref={mapRef}
         role="region"
         aria-label="Scrollable family memory trail"

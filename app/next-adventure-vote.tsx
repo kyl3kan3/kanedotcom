@@ -3,6 +3,7 @@
 import { memo, useRef, useState } from "react";
 import { NEXT_ADVENTURE_OPTIONS } from "@/lib/next-adventure";
 import { voteNextAdventure } from "./actions";
+import { celebrate } from "./motion-flourish";
 
 type NextAdventureVoteProps = {
   initialVoteCounts: Record<string, number>;
@@ -74,6 +75,7 @@ export const NextAdventureVote = memo(function NextAdventureVote({
 
     setCurrentVote(slug);
     if (previousVote !== slug) {
+      celebrate("small");
       setVotes((current) =>
         current.map((vote, voteIndex) => {
           const optionSlug = NEXT_ADVENTURE_OPTIONS[voteIndex].slug;
@@ -117,7 +119,7 @@ export const NextAdventureVote = memo(function NextAdventureVote({
           >
             <span aria-hidden="true">{option.emoji}</span>
             <b>{option.place}</b>
-            <small>
+            <small className="vote-tally" key={votes[index]}>
               {votes[index]} family vote{votes[index] === 1 ? "" : "s"}
             </small>
             <i>{currentVote === option.slug ? "✓" : "＋"}</i>

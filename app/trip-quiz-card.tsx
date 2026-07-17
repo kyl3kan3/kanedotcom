@@ -2,6 +2,7 @@
 
 import { memo, startTransition, useState } from "react";
 import { completeTripQuiz } from "./actions";
+import { celebrate } from "./motion-flourish";
 
 function memoryCountAnswers(total: number, chapterIndex: number) {
   const candidates = [
@@ -49,6 +50,7 @@ export const TripQuizCard = memo(function TripQuizCard({
   const answerQuiz = async (answer: number) => {
     setQuizAnswer(answer);
     if (answer === memoryCount) {
+      celebrate("big");
       startTransition(() => onStampEarned(tripId));
     }
 
