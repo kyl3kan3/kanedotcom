@@ -20,6 +20,67 @@ function plausibleDate(value) {
   return year >= 1970 && year <= new Date().getUTCFullYear() + 1 ? date : null;
 }
 
+// Mirrors lib/memory-intelligence.ts: EXIF capture times are zone-less wall
+// clocks, so interpret them as family-local (America/Chicago) time — or with
+// the camera's explicit UTC offset when recorded — never the server zone.
+const familyTimeZone = "America/Chicago";
+const familyClockParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: familyTimeZone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+function familyTimeZoneOffsetMs(instant) {
+  const parts = Object.fromEntries(
+    familyClockParts
+      .formatToParts(instant)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const reprojected = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour % 24,
+    parts.minute,
+    parts.second,
+  );
+  return reprojected - instant.getTime();
+}
+
+function exifCaptureInstant(value, utcOffset) {
+  if (typeof value !== "string") return null;
+  const wall = /^(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(
+    value.trim(),
+  );
+  if (!wall) return null;
+
+  const [, year, month, day, hour, minute, second] = wall.map(Number);
+  const offset =
+    typeof utcOffset === "string"
+      ? /^([+-])(\d{2}):?(\d{2})$/.exec(utcOffset.trim())
+      : null;
+  if (offset) {
+    const offsetMs =
+      (offset[1] === "-" ? -1 : 1) *
+      (Number(offset[2]) * 60 + Number(offset[3])) *
+      60_000;
+    return plausibleDate(
+      Date.UTC(year, month - 1, day, hour, minute, second) - offsetMs,
+    );
+  }
+
+  const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  let instant = asUtc - familyTimeZoneOffsetMs(new Date(asUtc));
+  instant = asUtc - familyTimeZoneOffsetMs(new Date(instant));
+  return plausibleDate(instant);
+}
+
 function positiveInteger(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
@@ -107,25 +168,31 @@ async function inspect(row) {
   }
 
   const [exif, image] = await Promise.all([
-    parseExif(buffer, [
-      "DateTimeOriginal",
-      "CreateDate",
-      "ModifyDate",
-      "ExifImageWidth",
-      "ExifImageHeight",
-      "ImageWidth",
-      "ImageHeight",
-      "PixelXDimension",
-      "PixelYDimension",
-    ]).catch(() => null),
+    parseExif(buffer, {
+      pick: [
+        "DateTimeOriginal",
+        "CreateDate",
+        "ModifyDate",
+        "OffsetTimeOriginal",
+        "OffsetTimeDigitized",
+        "OffsetTime",
+        "ExifImageWidth",
+        "ExifImageHeight",
+        "ImageWidth",
+        "ImageHeight",
+        "PixelXDimension",
+        "PixelYDimension",
+      ],
+      reviveValues: false,
+    }).catch(() => null),
     sharp(buffer).metadata(),
   ]);
   return {
     sourceMediaId,
     capturedAt:
-      plausibleDate(exif?.DateTimeOriginal) ??
-      plausibleDate(exif?.CreateDate) ??
-      plausibleDate(exif?.ModifyDate),
+      exifCaptureInstant(exif?.DateTimeOriginal, exif?.OffsetTimeOriginal) ??
+      exifCaptureInstant(exif?.CreateDate, exif?.OffsetTimeDigitized) ??
+      exifCaptureInstant(exif?.ModifyDate, exif?.OffsetTime),
     captureTimeSource: "exif",
     width:
       positiveInteger(exif?.ExifImageWidth) ??

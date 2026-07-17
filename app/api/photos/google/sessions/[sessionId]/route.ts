@@ -18,10 +18,12 @@ import {
 import {
   copyGoogleMediaToPrivateBlob,
   deletePrivateMemoryBlob,
+  escapeLikePattern,
   getGoogleMemoryDirectory,
   getGoogleMemoryPathname,
   normalizeGoogleMediaFilename,
   normalizeGoogleMediaMimeType,
+  PermanentMemoryImportError,
 } from "@/lib/memory-storage";
 
 export const maxDuration = 300;
@@ -186,7 +188,7 @@ async function listPickedItems(
 
 async function deleteSession(sessionId: string, accessToken: string) {
   const response = await fetch(
-    `https://photospicker.googleapis.com/v1/sessions/${sessionId}`,
+    `https://photospicker.googleapis.com/v1/sessions/${encodeURIComponent(sessionId)}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -285,7 +287,7 @@ async function importCandidate(
           eq(memories.familyId, member.familyId),
           like(
             memories.storageKey,
-            `${getGoogleMemoryDirectory(member.familyId, item.googleId)}%`,
+            `${escapeLikePattern(getGoogleMemoryDirectory(member.familyId, item.googleId))}%`,
           ),
           eq(memories.status, "ready"),
           isNull(memories.deletedAt),
@@ -458,6 +460,7 @@ async function importInBatches(
 ) {
   const successes: Array<{ memory: ImportedMemory; saved: boolean }> = [];
   const failures: string[] = [];
+  const permanentFailures: string[] = [];
 
   for (let index = 0; index < candidates.length; index += 3) {
     const batch = candidates.slice(index, index + 3);
@@ -470,6 +473,10 @@ async function importInBatches(
     results.forEach((result) => {
       if (result.status === "fulfilled") {
         successes.push(result.value);
+      } else if (result.reason instanceof PermanentMemoryImportError) {
+        // Retrying the page cannot fix these items; report them as skipped so
+        // one bad selection does not block the rest of the import.
+        permanentFailures.push(result.reason.message);
       } else {
         failures.push(
           result.reason instanceof Error
@@ -480,7 +487,7 @@ async function importInBatches(
     });
   }
 
-  return { successes, failures };
+  return { successes, failures, permanentFailures };
 }
 
 export async function POST(
@@ -523,7 +530,7 @@ export async function POST(
     const importAbortSignal = AbortSignal.timeout(240_000);
 
     const session = await fetchGooglePhotos<GooglePhotosSession>(
-      `https://photospicker.googleapis.com/v1/sessions/${sessionId}`,
+      `https://photospicker.googleapis.com/v1/sessions/${encodeURIComponent(sessionId)}`,
       accessToken,
       { signal: importAbortSignal },
     );
@@ -600,7 +607,7 @@ export async function POST(
       ];
     });
 
-    const { successes, failures } = await importInBatches(
+    const { successes, failures, permanentFailures } = await importInBatches(
       candidates,
       accessToken,
       importAbortSignal,
@@ -608,8 +615,15 @@ export async function POST(
     );
 
     const saved = successes.filter((result) => result.saved).length;
-    const skipped = pickedItems.length - candidates.length;
+    const skipped =
+      pickedItems.length - candidates.length + permanentFailures.length;
     if (saved > 0) revalidatePath("/");
+
+    if (permanentFailures.length > 0) {
+      console.warn("[google-photos-import] unsupported items skipped", {
+        skippedPermanently: permanentFailures.length,
+      });
+    }
 
     if (failures.length > 0) {
       console.warn("[google-photos-import] import page will retry", {

@@ -1,5 +1,6 @@
 import exifr from "exifr";
 import sharp from "sharp";
+import { familyWallTimeToInstant } from "@/lib/family-holidays";
 import { getPrivateMemoryUrl } from "@/lib/memory-storage";
 
 const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
@@ -56,6 +57,38 @@ function cleanText(value: unknown) {
   return typeof value === "string" && value.trim()
     ? value.trim().slice(0, 160)
     : null;
+}
+
+const EXIF_WALL_TIME_PATTERN =
+  /^(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
+const EXIF_UTC_OFFSET_PATTERN = /^([+-])(\d{2}):?(\d{2})$/;
+
+// EXIF capture times are zone-less local wall clocks. Interpret them with the
+// tag's explicit UTC offset when the camera recorded one, and as family-local
+// time otherwise, instead of trusting the server's own time zone.
+function exifCaptureInstant(value: unknown, utcOffset: unknown) {
+  if (typeof value !== "string") return null;
+  const wall = EXIF_WALL_TIME_PATTERN.exec(value.trim());
+  if (!wall) return null;
+
+  const [, year, month, day, hour, minute, second] = wall.map(Number);
+  const offset =
+    typeof utcOffset === "string"
+      ? EXIF_UTC_OFFSET_PATTERN.exec(utcOffset.trim())
+      : null;
+  if (offset) {
+    const offsetMs =
+      (offset[1] === "-" ? -1 : 1) *
+      (Number(offset[2]) * 60 + Number(offset[3])) *
+      60_000;
+    return plausibleCaptureDate(
+      Date.UTC(year, month - 1, day, hour, minute, second) - offsetMs,
+    );
+  }
+
+  return plausibleCaptureDate(
+    familyWallTimeToInstant({ year, month, day, hour, minute, second }),
+  );
 }
 
 function plausibleCaptureDate(value: unknown) {
@@ -183,19 +216,27 @@ export async function prepareMemoryForAi(
 
   const buffer = await fetchPrivateMemory(memory);
   const [exif, imageMetadata, thumbnail] = await Promise.all([
-    parseExif(buffer, [
-      "DateTimeOriginal",
-      "CreateDate",
-      "ModifyDate",
-      "Make",
-      "Model",
-      "ExifImageWidth",
-      "ExifImageHeight",
-      "ImageWidth",
-      "ImageHeight",
-      "PixelXDimension",
-      "PixelYDimension",
-    ]).catch(() => null),
+    parseExif(buffer, {
+      pick: [
+        "DateTimeOriginal",
+        "CreateDate",
+        "ModifyDate",
+        "OffsetTimeOriginal",
+        "OffsetTimeDigitized",
+        "OffsetTime",
+        "Make",
+        "Model",
+        "ExifImageWidth",
+        "ExifImageHeight",
+        "ImageWidth",
+        "ImageHeight",
+        "PixelXDimension",
+        "PixelYDimension",
+      ],
+      // Keep dates as raw wall-clock strings; reviving them would bake in the
+      // server's time zone before exifCaptureInstant can interpret them.
+      reviveValues: false,
+    }).catch(() => null),
     sharp(buffer).metadata(),
     sharp(buffer)
       .rotate()
@@ -211,9 +252,9 @@ export async function prepareMemoryForAi(
 
   const capturedAt =
     memory.capturedAt ??
-    plausibleCaptureDate(exif?.DateTimeOriginal) ??
-    plausibleCaptureDate(exif?.CreateDate) ??
-    plausibleCaptureDate(exif?.ModifyDate);
+    exifCaptureInstant(exif?.DateTimeOriginal, exif?.OffsetTimeOriginal) ??
+    exifCaptureInstant(exif?.CreateDate, exif?.OffsetTimeDigitized) ??
+    exifCaptureInstant(exif?.ModifyDate, exif?.OffsetTime);
   const width =
     memory.width ??
     positiveInteger(exif?.ExifImageWidth) ??

@@ -21,7 +21,9 @@ import { normalizeFamilyTripPresentation } from "@/lib/family-holidays";
 
 const applySchema = z.object({
   runId: z.string().uuid(),
-  approvedDraftIds: z.array(z.string().uuid()).min(1).max(8),
+  // The organizer proposes up to 8 model groups plus one synthesized leftover
+  // group, so a full approval can carry 9 drafts.
+  approvedDraftIds: z.array(z.string().uuid()).min(1).max(9),
 });
 
 function slugify(value: string, suffix: string) {
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
   }));
   const now = new Date();
 
-  await db.batch([
+  const [, assignedResult, approvedResult] = await db.batch([
     db.insert(trips).values(tripRows),
     db.execute(sql`
       with assignments as (
@@ -187,6 +189,7 @@ export async function POST(request: Request) {
         and memory.family_id = ${context.member.familyId}
         and memory.trip_id is null
         and memory.deleted_at is null
+      returning memory.id
     `),
     db.execute(sql`
       with approvals as (
@@ -203,6 +206,7 @@ export async function POST(request: Request) {
         and draft.family_id = ${context.member.familyId}
         and draft.run_id = ${parsed.data.runId}
         and draft.status = 'draft'
+      returning draft.id
     `),
     db
       .update(tripDrafts)
@@ -216,6 +220,65 @@ export async function POST(request: Request) {
         ),
       ),
   ]);
+
+  // The guarded updates silently skip rows whose state changed between the
+  // validation reads and this batch (for example a concurrent organizer run
+  // rejecting the drafts). If anything was skipped, undo this batch's writes
+  // and ask the admin to review the fresh drafts instead.
+  const tripIds = tripRows.map((trip) => trip.id);
+  if (
+    assignedResult.rows.length !== assignments.length ||
+    approvedResult.rows.length !== approvals.length
+  ) {
+    await db.batch([
+      db
+        .update(memories)
+        .set({ tripId: null, caption: "" })
+        .where(
+          and(
+            eq(memories.familyId, context.member.familyId),
+            inArray(memories.tripId, tripIds),
+          ),
+        ),
+      db
+        .update(tripDrafts)
+        .set({ status: "draft", approvedTripId: null, reviewedAt: null })
+        .where(
+          and(
+            eq(tripDrafts.familyId, context.member.familyId),
+            eq(tripDrafts.runId, parsed.data.runId),
+            inArray(tripDrafts.approvedTripId, tripIds),
+          ),
+        ),
+      db
+        .update(tripDrafts)
+        .set({ status: "draft", reviewedAt: null })
+        .where(
+          and(
+            eq(tripDrafts.familyId, context.member.familyId),
+            eq(tripDrafts.runId, parsed.data.runId),
+            eq(tripDrafts.status, "rejected"),
+            eq(tripDrafts.reviewedAt, now),
+          ),
+        ),
+      db
+        .delete(trips)
+        .where(
+          and(
+            eq(trips.familyId, context.member.familyId),
+            inArray(trips.id, tripIds),
+          ),
+        ),
+    ]);
+
+    console.warn("[memory-organizer] apply reverted after concurrent change", {
+      family: context.member.familyId.slice(0, 8),
+    });
+    return NextResponse.json(
+      { error: "These drafts changed while applying. Refresh and try again." },
+      { status: 409 },
+    );
+  }
 
   revalidatePath("/");
   console.info("[memory-organizer] drafts approved", {

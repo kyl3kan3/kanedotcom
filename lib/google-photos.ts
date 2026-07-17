@@ -8,6 +8,10 @@ export const GOOGLE_PHOTOS_SCOPE =
 export const GOOGLE_PHOTOS_STATE_COOKIE = "family_google_photos_state";
 export const GOOGLE_PHOTOS_TOKEN_COOKIE = "family_google_photos_token";
 
+// The live Google bearer token only needs to ride on the picker API routes;
+// scoping the cookie path keeps it off every other request.
+export const GOOGLE_PHOTOS_COOKIE_PATH = "/api/photos/google";
+
 const GOOGLE_PHOTOS_CALLBACK_PATH = "/api/photos/google/callback";
 const GOOGLE_PHOTOS_PRODUCTION_ORIGIN = "https://kanedotcom.com";
 
@@ -170,7 +174,7 @@ export function getCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     maxAge,
-    path: "/",
+    path: GOOGLE_PHOTOS_COOKIE_PATH,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
   };
@@ -183,7 +187,10 @@ export async function getGoogleAccessToken() {
 
 export async function clearGoogleAccessToken() {
   const cookieStore = await cookies();
-  cookieStore.delete(GOOGLE_PHOTOS_TOKEN_COOKIE);
+  cookieStore.delete({
+    name: GOOGLE_PHOTOS_TOKEN_COOKIE,
+    path: GOOGLE_PHOTOS_COOKIE_PATH,
+  });
 }
 
 export function googlePhotosError(message: string, status = 400) {
